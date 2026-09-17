@@ -22,6 +22,7 @@ describe("AppHeader", () => {
       "/leaderboard",
     );
     expect(screen.queryByRole("link", { name: "Analytics" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "About" })).toHaveAttribute("href", "/about");
     expect(screen.getByRole("radio", { name: "Dark theme" })).toHaveAttribute(
       "aria-checked",
       "true",

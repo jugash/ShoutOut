@@ -8,6 +8,7 @@ describe("isPublicPath", () => {
     "/api/health",
     "/api/ready",
     "/brand/logo.svg",
+    "/about",
   ])("allows %s", (path) => {
     expect(isPublicPath(path)).toBe(true);
   });

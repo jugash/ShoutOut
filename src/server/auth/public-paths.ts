@@ -6,6 +6,7 @@ const PUBLIC_PREFIXES = [
   "/api/ready",
   "/api/internal",
   "/brand",
+  "/about",
 ];
 
 export function isPublicPath(pathname: string): boolean {

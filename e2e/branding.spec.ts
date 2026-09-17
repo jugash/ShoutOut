@@ -33,9 +33,20 @@ test.describe("branding", () => {
     await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/);
   });
 
+  test("the about page explains the idea without signing in", async ({ page }) => {
+    await page.goto("/about");
+    await expect(page).toHaveTitle("About · ShoutOut");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Why ShoutOut?");
+    await expect(
+      page.getByRole("heading", { name: /why you only get \d+ a quarter/i }),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "Sign in to get started" }).click();
+    await expect(page).toHaveURL(/\/signin/);
+  });
+
   test("no horizontal scrolling on a phone", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    for (const path of ["/signin", "/brand"]) {
+    for (const path of ["/signin", "/brand", "/about"]) {
       await page.goto(path);
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - window.innerWidth,

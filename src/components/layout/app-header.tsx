@@ -25,6 +25,7 @@ export function navItems(user: HeaderUser) {
     ...(canViewAnalytics(user.roles, loadConfig().analyticsVisibility)
       ? [{ href: "/analytics", label: "Analytics", icon: "📊" }]
       : []),
+    { href: "/about", label: "About", icon: "💡" },
   ];
 }
 
