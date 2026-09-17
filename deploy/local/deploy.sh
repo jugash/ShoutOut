@@ -67,6 +67,11 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
   docker images --format '{{.Repository}}:{{.Tag}}' \
     | grep -E '(^|/)shoutout(-migrate)?:' | grep -v ":$TAG\$" \
     | xargs -r docker rmi -f >/dev/null 2>&1 || true
+  # Untagged build-stage images from our Dockerfile (labelled) are large; remove them too.
+  # (The Docker CLI against Podman ignores combined filters, so prefer podman.)
+  images_cli="$(command -v podman || command -v docker)"
+  "$images_cli" images --filter dangling=true --filter label=org.shoutout.build=true -q \
+    | xargs -r "$images_cli" rmi -f >/dev/null 2>&1 || true
   for node in $(k3d node list --no-headers | awk -v c="$CLUSTER" '$3==c && ($2=="server" || $2=="agent") {print $1}'); do
     docker exec "$node" sh -c "crictl images -o json | grep -o '\"docker.io/library/shoutout[^\"]*\"' | tr -d '\"' | grep -v ':$TAG\$' | xargs -r -n1 crictl rmi" >/dev/null 2>&1 || true
   done
