@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDayMonth, formatRelativeTime } from "./format";
+import { formatDayMonth, formatMonthYear, formatRelativeTime } from "./format";
 
 describe("formatRelativeTime", () => {
   const now = new Date("2026-09-17T12:00:00Z");
@@ -26,5 +26,11 @@ describe("formatRelativeTime", () => {
 describe("formatDayMonth", () => {
   it("formats in UTC", () => {
     expect(formatDayMonth(new Date("2026-10-01T00:00:00Z"))).toBe("1 Oct");
+  });
+});
+
+describe("formatMonthYear", () => {
+  it("formats in UTC with a two-digit year", () => {
+    expect(formatMonthYear(new Date("2026-09-01T00:00:00Z"))).toBe("Sep 26");
   });
 });

@@ -108,3 +108,9 @@ Call with (dict "ctx" $ "key" "auth-secret" "value" .Values.secrets.authSecret)
 {{- fail "database.url or database.existingSecret is required when postgres.enabled=false" }}
 {{- end }}
 {{- end }}
+
+{{- define "shoutout.validateConfig" -}}
+{{- if not (has .Values.config.analyticsVisibility (list "admins" "everyone")) }}
+{{- fail (printf "config.analyticsVisibility must be \"admins\" or \"everyone\", got %q" .Values.config.analyticsVisibility) }}
+{{- end }}
+{{- end }}

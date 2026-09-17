@@ -21,3 +21,8 @@ export function formatRelativeTime(date: Date, now = new Date()): string {
 export function formatDayMonth(date: Date): string {
   return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}`;
 }
+
+/** "Sep 26" (UTC) */
+export function formatMonthYear(date: Date): string {
+  return `${MONTHS[date.getUTCMonth()]} ${String(date.getUTCFullYear()).slice(-2)}`;
+}

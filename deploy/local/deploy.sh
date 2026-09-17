@@ -60,6 +60,16 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
     docker save "shoutout:$TAG" "shoutout-migrate:$TAG" | docker exec -i "$node" ctr -n k8s.io images import - >/dev/null
   done
   echo "$TAG" > "$TAG_FILE"
+
+  # Old builds fill the Podman/Docker VM disk, and kubelet then garbage-collects
+  # images (causing ErrImageNeverPull). Keep only the image being deployed.
+  log "Removing older ShoutOut images"
+  docker images --format '{{.Repository}}:{{.Tag}}' \
+    | grep -E '(^|/)shoutout(-migrate)?:' | grep -v ":$TAG\$" \
+    | xargs -r docker rmi -f >/dev/null 2>&1 || true
+  for node in $(k3d node list --no-headers | awk -v c="$CLUSTER" '$3==c && ($2=="server" || $2=="agent") {print $1}'); do
+    docker exec "$node" sh -c "crictl images -o json | grep -o '\"docker.io/library/shoutout[^\"]*\"' | tr -d '\"' | grep -v ':$TAG\$' | xargs -r -n1 crictl rmi" >/dev/null 2>&1 || true
+  done
 else
   TAG="$(cat "$TAG_FILE")"
 fi

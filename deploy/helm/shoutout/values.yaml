@@ -21,6 +21,9 @@ config:
   quarterlyBudget: 20
   # -- Maximum recipients in one shoutout (SHOUTOUT_MAX_RECIPIENTS).
   maxRecipients: 5
+  # -- Who can open the analytics dashboard: "admins" or "everyone" (SHOUTOUT_ANALYTICS_VISIBILITY).
+  # The "not recognised recently" list is always admin-only.
+  analyticsVisibility: admins
 
 # Sync people from Keycloak so everyone can be recognised before they first sign in.
 # The Keycloak client's service account needs the realm-management "view-users" role.

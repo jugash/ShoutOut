@@ -17,6 +17,11 @@ describe("AppHeader", () => {
     const nav = screen.getByRole("navigation", { name: "Main" });
     expect(nav).toHaveTextContent("Feed");
     expect(screen.getByRole("link", { name: "People" })).toHaveAttribute("href", "/people");
+    expect(screen.getByRole("link", { name: "Leaderboard" })).toHaveAttribute(
+      "href",
+      "/leaderboard",
+    );
+    expect(screen.queryByRole("link", { name: "Analytics" })).not.toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Dark theme" })).toHaveAttribute(
       "aria-checked",
       "true",
@@ -38,5 +43,6 @@ describe("AppHeader", () => {
     );
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
     expect(screen.getByText("Admin")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Analytics" })).toHaveAttribute("href", "/analytics");
   });
 });

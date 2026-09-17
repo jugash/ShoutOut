@@ -62,6 +62,13 @@ Keycloak only imports the realm on first start; after changing realm settings ru
 | http://shoutout.localtest.me | ShoutOut                    |
 | http://auth.localtest.me     | Keycloak (realm `shoutout`) |
 
+Optional demo data (about six months of shoutouts, so leaderboards and analytics have something to show):
+
+```bash
+deploy/local/seed-demo.sh           # add
+deploy/local/seed-demo.sh --remove  # remove
+```
+
 Demo users (local only, password `shoutout`): `alice` (admin), `bob`, `carol`,
 `dave`, `erin`, `frank`, `grace`, `henry`.
 

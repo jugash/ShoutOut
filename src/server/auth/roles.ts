@@ -26,3 +26,11 @@ export function extractRoles(claims: Record<string, unknown> | null | undefined)
 export function isAdmin(roles: readonly string[] | undefined): boolean {
   return roles?.includes(ROLES.admin) ?? false;
 }
+
+/** Analytics are for admins unless configured for everyone. */
+export function canViewAnalytics(
+  roles: readonly string[] | undefined,
+  visibility: "admins" | "everyone",
+): boolean {
+  return visibility === "everyone" || isAdmin(roles);
+}

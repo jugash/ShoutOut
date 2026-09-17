@@ -8,7 +8,7 @@ export async function sendShoutout(
   db: Db,
   senderId: string,
   input: SendShoutoutInput,
-  config: AppConfig,
+  config: Pick<AppConfig, "quarterlyBudget">,
   now = new Date(),
 ) {
   const recipientIds = [...new Set(input.recipientIds)];

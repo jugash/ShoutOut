@@ -1,3 +1,4 @@
+{{- include "shoutout.validateConfig" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -85,6 +86,8 @@ spec:
               value: {{ .Values.config.quarterlyBudget | int | quote }}
             - name: SHOUTOUT_MAX_RECIPIENTS
               value: {{ .Values.config.maxRecipients | int | quote }}
+            - name: SHOUTOUT_ANALYTICS_VISIBILITY
+              value: {{ .Values.config.analyticsVisibility | quote }}
             - name: SHOUTOUT_SYNC_ON_STARTUP
               value: {{ and .Values.userSync.enabled .Values.userSync.onStartup | quote }}
             - name: SHOUTOUT_SYNC_TOKEN

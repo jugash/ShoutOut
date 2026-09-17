@@ -73,7 +73,7 @@ describe("shoutout actions", () => {
           message: "Thanks!",
           visibility: "PRIVATE",
         },
-        { quarterlyBudget: 20, maxRecipients: 2 },
+        expect.objectContaining({ quarterlyBudget: 20, maxRecipients: 2 }),
       );
       expect(revalidatePath).toHaveBeenCalledWith("/");
     });
