@@ -6,10 +6,25 @@ export function niceMax(max: number): number {
   return step * magnitude;
 }
 
-/** Compact number for tiles: 1,284 / 12.9K / 4.2M. */
+const COMPACT_UNITS = [
+  { size: 1e9, suffix: "B" },
+  { size: 1e6, suffix: "M" },
+  { size: 1e3, suffix: "K" },
+] as const;
+
+/**
+ * Compact number for tiles: 1,284 / 12.9K / 4.2M. Done by hand because ICU's
+ * compact notation differs between Node builds ("12.9K" vs "12.9k").
+ */
 export function compactNumber(value: number): string {
   if (Math.abs(value) < 10_000) return value.toLocaleString("en-GB");
-  return new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 }).format(
-    value,
-  );
+  const sign = value < 0 ? "-" : "";
+  const abs = Math.abs(value);
+  const index = COMPACT_UNITS.findIndex(({ size }) => abs >= size);
+  const rounded = Math.round((abs / COMPACT_UNITS[index].size) * 10) / 10;
+  // 999,960 would round to "1000K"; show "1M" instead.
+  if (rounded >= 1000 && index > 0) {
+    return `${sign}${rounded / 1000}${COMPACT_UNITS[index - 1].suffix}`;
+  }
+  return `${sign}${rounded}${COMPACT_UNITS[index].suffix}`;
 }

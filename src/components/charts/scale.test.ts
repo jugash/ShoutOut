@@ -24,6 +24,10 @@ describe("compactNumber", () => {
     expect(compactNumber(1284)).toBe("1,284");
     expect(compactNumber(12_900)).toBe("12.9K");
     expect(compactNumber(4_200_000)).toBe("4.2M");
+    expect(compactNumber(10_000)).toBe("10K");
+    expect(compactNumber(999_960)).toBe("1M");
+    expect(compactNumber(3_050_000_000)).toBe("3.1B");
+    expect(compactNumber(-12_900)).toBe("-12.9K");
   });
 });
 
