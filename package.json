@@ -17,7 +17,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "postinstall": "prisma generate",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "audit:deps": "npm audit --audit-level=high"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
@@ -54,5 +55,9 @@
   },
   "engines": {
     "node": ">=22.12"
+  },
+  "overrides": {
+    "mysql2": "^3.24.4",
+    "deepmerge-ts": "^8.0.2"
   }
 }

@@ -10,7 +10,10 @@ export async function GET(request: Request) {
   if (!session?.user) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
-  const query = new URL(request.url).searchParams.get("q") ?? "";
-  const people = await searchPeople(getDb(), session.user.id, query.slice(0, 100));
+  const params = new URL(request.url).searchParams;
+  const query = params.get("q") ?? "";
+  const people = await searchPeople(getDb(), session.user.id, query.slice(0, 100), 8, {
+    includeSelf: params.get("self") === "1",
+  });
   return Response.json({ people });
 }

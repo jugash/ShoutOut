@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { FeedItem } from "@/server/shoutouts/feed";
 
-const deleteShoutoutAction = vi.fn();
-vi.mock("@/app/actions/shoutouts", () => ({ deleteShoutoutAction }));
+vi.mock("@/app/actions/shoutouts", () => ({ deleteShoutoutAction: vi.fn() }));
+vi.mock("@/app/actions/social", () => ({ toggleReactionAction: vi.fn() }));
 
 const { FeedItemCard } = await import("./feed-item");
 
@@ -28,18 +28,42 @@ const item: FeedItem = {
     { id: "u2", name: "Bob Baker" },
     { id: "u3", name: "Carol Chen" },
   ],
+  reactions: [
+    {
+      key: "clap",
+      emoji: "👏",
+      label: "Applause",
+      count: 2,
+      reacted: true,
+      names: ["Bob", "Carol"],
+    },
+  ],
+  commentCount: 0,
   canModify: false,
 };
 
 describe("FeedItemCard", () => {
-  it("shows a public shoutout without actions", () => {
-    render(<FeedItemCard item={item} now={now} />);
+  it("shows a public shoutout with profile links, reactions and a comment link", () => {
+    render(<FeedItemCard item={item} viewerName="Bob Baker" now={now} />);
     const card = screen.getByRole("article", {
       name: "Mentor from Alice Anders to Bob Baker and Carol Chen",
     });
+    expect(card).toHaveClass("sm:flex");
     expect(card).toHaveTextContent("Thanks for the help");
-    expect(card).toHaveTextContent("#Collaboration");
-    expect(screen.getByText("3h ago")).toHaveAttribute("dateTime", "2026-09-17T09:00:00.000Z");
+    expect(screen.getByRole("link", { name: "Alice Anders" })).toHaveAttribute(
+      "href",
+      "/people/u1",
+    );
+    expect(screen.getByRole("link", { name: "Carol Chen" })).toHaveAttribute("href", "/people/u3");
+    expect(screen.getByRole("link", { name: "3h ago" })).toHaveAttribute("href", "/shoutouts/s1");
+    expect(screen.getByRole("button", { name: "Applause, 2" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("link", { name: /Comment$/ })).toHaveAttribute(
+      "href",
+      "/shoutouts/s1#comments",
+    );
     expect(screen.queryByText("Private")).not.toBeInTheDocument();
     expect(screen.queryByText(/edited/)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
@@ -48,12 +72,14 @@ describe("FeedItemCard", () => {
   it("marks private and edited shoutouts and offers edit/delete to the sender", () => {
     render(
       <FeedItemCard
-        item={{ ...item, visibility: "PRIVATE", editedAt: now, canModify: true }}
+        item={{ ...item, visibility: "PRIVATE", editedAt: now, canModify: true, commentCount: 1 }}
+        viewerName="Alice Anders"
         now={now}
       />,
     );
     expect(screen.getByText("Private")).toBeInTheDocument();
     expect(screen.getByText("· edited")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /1 comment$/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute(
       "href",
       "/shoutouts/s1/edit",
@@ -61,8 +87,22 @@ describe("FeedItemCard", () => {
     expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
-  it("defaults to the current time", () => {
-    render(<FeedItemCard item={{ ...item, createdAt: new Date() }} />);
+  it("supports the stacked layout without a comment link, and defaults the time", () => {
+    render(
+      <FeedItemCard
+        item={{ ...item, createdAt: new Date(), commentCount: 3 }}
+        viewerName="Bob"
+        layout="stacked"
+        showCommentLink={false}
+      />,
+    );
+    expect(screen.getByRole("article")).not.toHaveClass("sm:flex");
     expect(screen.getByText("just now")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /comments/ })).not.toBeInTheDocument();
+  });
+
+  it("pluralises comment counts", () => {
+    render(<FeedItemCard item={{ ...item, commentCount: 4 }} viewerName="Bob" now={now} />);
+    expect(screen.getByRole("link", { name: /4 comments$/ })).toBeInTheDocument();
   });
 });

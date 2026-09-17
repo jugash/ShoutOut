@@ -21,8 +21,10 @@ model User {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  sent     Shoutout[]          @relation("SentShoutouts")
-  received ShoutoutRecipient[]
+  sent      Shoutout[]          @relation("SentShoutouts")
+  received  ShoutoutRecipient[]
+  reactions Reaction[]
+  comments  Comment[]
 
   @@index([active, name])
   @@map("users")
@@ -85,6 +87,8 @@ model Shoutout {
   card       Card                @relation(fields: [cardId], references: [id])
   value      CompanyValue        @relation(fields: [valueId], references: [id])
   recipients ShoutoutRecipient[]
+  reactions  Reaction[]
+  comments   Comment[]
 
   @@index([createdAt(sort: Desc), id])
   @@index([senderId, createdAt])
@@ -101,4 +105,35 @@ model ShoutoutRecipient {
   @@id([shoutoutId, userId])
   @@index([userId])
   @@map("shoutout_recipients")
+}
+
+/// An emoji reaction. The emoji is a key from src/lib/reactions.ts.
+model Reaction {
+  shoutoutId String   @map("shoutout_id")
+  userId     String   @map("user_id")
+  emoji      String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  shoutout Shoutout @relation(fields: [shoutoutId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@id([shoutoutId, userId, emoji])
+  @@map("reactions")
+}
+
+model Comment {
+  id         String    @id @default(cuid())
+  shoutoutId String    @map("shoutout_id")
+  authorId   String    @map("author_id")
+  body       String    @db.VarChar(500)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  /// Set when the author deletes it.
+  deletedAt  DateTime? @map("deleted_at")
+
+  shoutout Shoutout @relation(fields: [shoutoutId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id])
+
+  @@index([shoutoutId, createdAt])
+  @@map("comments")
 }
