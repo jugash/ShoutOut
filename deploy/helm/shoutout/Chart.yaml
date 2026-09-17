@@ -1,0 +1,10 @@
+apiVersion: v2
+name: shoutout
+description: ShoutOut - internal kudos platform (app, PostgreSQL, Keycloak)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.24.0-0"
+keywords: [kudos, recognition, keycloak]
+home: https://github.com/jugash/ShoutOut
+sources: [https://github.com/jugash/ShoutOut]

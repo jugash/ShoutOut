@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+/* ShoutOut brand tokens (warm & friendly). Expanded in the branding milestone. */
+:root {
+  --background: #fffaf0;
+  --surface: #ffffff;
+  --foreground: #2b2a33;
+  --muted: #6b6878;
+  --sunny: #ffc845;
+  --sunny-strong: #f5a623;
+  --teal: #2fa4a0;
+  --teal-strong: #1f7f7c;
+  --border: #f0e6d2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1b22;
+    --surface: #26252e;
+    --foreground: #f5f1e8;
+    --muted: #b3afc0;
+    --sunny: #ffd36b;
+    --sunny-strong: #ffc845;
+    --teal: #5cc6c1;
+    --teal-strong: #8fdcd8;
+    --border: #3a3845;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-sunny: var(--sunny);
+  --color-sunny-strong: var(--sunny-strong);
+  --color-teal: var(--teal);
+  --color-teal-strong: var(--teal-strong);
+  --color-border: var(--border);
+  --font-sans: var(--font-nunito);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}

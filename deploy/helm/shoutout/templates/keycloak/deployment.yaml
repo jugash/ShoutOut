@@ -1,0 +1,94 @@
+{{- if .Values.keycloak.enabled }}
+{{- if not .Values.postgres.enabled }}
+{{- fail "The bundled Keycloak stores its data in the bundled PostgreSQL; set postgres.enabled=true or keycloak.enabled=false" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "shoutout.fullname" . }}-keycloak
+  labels:
+    {{- include "shoutout.labels" (dict "ctx" $ "component" "keycloak") | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "shoutout.selectorLabels" (dict "ctx" $ "component" "keycloak") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "shoutout.selectorLabels" (dict "ctx" $ "component" "keycloak") | nindent 8 }}
+      annotations:
+        checksum/realm: {{ include (print $.Template.BasePath "/keycloak/realm-configmap.yaml") . | sha256sum }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: keycloak
+          image: "{{ .Values.keycloak.image.repository }}:{{ .Values.keycloak.image.tag }}"
+          imagePullPolicy: {{ .Values.keycloak.image.pullPolicy }}
+          # Realm import is skipped if the realm already exists.
+          args: ["start", "--import-realm"]
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          env:
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: {{ .Values.keycloak.adminUsername | quote }}
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "shoutout.secretName" . }}
+                  key: keycloak-admin-password
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: "jdbc:postgresql://{{ include "shoutout.postgres.host" . }}:5432/{{ .Values.keycloak.database }}"
+            - name: KC_DB_USERNAME
+              value: {{ .Values.postgres.username | quote }}
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "shoutout.secretName" . }}
+                  key: postgres-password
+            - name: KC_HOSTNAME
+              value: {{ include "shoutout.keycloak.url" . | quote }}
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: SHOUTOUT_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "shoutout.secretName" . }}
+                  key: keycloak-client-secret
+          startupProbe:
+            httpGet: { path: /health/started, port: management }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /health/ready, port: management }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health/live, port: management }
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: realm
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          resources:
+            {{- toYaml .Values.keycloak.resources | nindent 12 }}
+      volumes:
+        - name: realm
+          configMap:
+            name: {{ include "shoutout.fullname" . }}-keycloak-realm
+{{- end }}

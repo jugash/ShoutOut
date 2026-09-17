@@ -1,0 +1,16 @@
+{{- if .Values.keycloak.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "shoutout.fullname" . }}-keycloak
+  labels:
+    {{- include "shoutout.labels" (dict "ctx" $ "component" "keycloak") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  selector:
+    {{- include "shoutout.selectorLabels" (dict "ctx" $ "component" "keycloak") | nindent 4 }}
+{{- end }}

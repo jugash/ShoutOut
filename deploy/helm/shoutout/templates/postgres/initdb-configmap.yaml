@@ -1,0 +1,13 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "shoutout.postgres.host" . }}-initdb
+  labels:
+    {{- include "shoutout.labels" (dict "ctx" $ "component" "postgres") | nindent 4 }}
+data:
+  {{- if .Values.keycloak.enabled }}
+  10-keycloak-db.sql: |
+    CREATE DATABASE {{ .Values.keycloak.database }};
+  {{- end }}
+{{- end }}

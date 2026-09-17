@@ -1,0 +1,16 @@
+ShoutOut is deploying to namespace {{ .Release.Namespace }}.
+
+  App:       {{ .Values.appUrl }}
+{{- if .Values.keycloak.enabled }}
+  Keycloak:  {{ .Values.keycloak.url }}  (realm: {{ .Values.keycloak.realm.name }})
+
+Keycloak admin password:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "shoutout.secretName" . }} -o jsonpath='{.data.keycloak-admin-password}' | base64 -d
+{{- if .Values.keycloak.realm.seedDemoUsers }}
+
+Demo users (password from keycloak.realm.demoUserPassword): alice (admin), bob, carol, dave, erin, frank, grace, henry
+{{- end }}
+{{- end }}
+
+Smoke test:
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}

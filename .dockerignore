@@ -1,0 +1,15 @@
+.git
+.github
+.next
+node_modules
+coverage
+playwright-report
+test-results
+deploy
+e2e
+docs
+.env*
+*.md
+Dockerfile
+.dockerignore
+src/generated
