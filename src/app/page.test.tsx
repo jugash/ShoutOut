@@ -7,7 +7,11 @@ const redirect = vi.fn(() => {
 });
 vi.mock("@/auth", () => ({ auth }));
 vi.mock("next/navigation", () => ({ redirect }));
-vi.mock("@/app/actions/auth", () => ({ signOutEverywhere: vi.fn() }));
+vi.mock("@/components/layout/app-header", () => ({
+  AppHeader: ({ user }: { user: { name?: string } }) => (
+    <header>header for {user.name ?? "anon"}</header>
+  ),
+}));
 
 const { default: HomePage } = await import("./page");
 
@@ -22,23 +26,21 @@ describe("HomePage", () => {
     expect(redirect).toHaveBeenCalledWith("/signin");
   });
 
-  it("greets a regular user by first name", async () => {
+  it("greets the user by first name and shows the cards", async () => {
     auth.mockResolvedValue({
       user: { id: "u1", name: "Bob Builder", email: "bob@example.com", roles: ["shoutout-user"] },
     });
     render(await HomePage());
     expect(screen.getByRole("heading", { name: /hi bob/i })).toBeInTheDocument();
-    expect(screen.getByText(/bob@example.com/)).toBeInTheDocument();
-    expect(screen.queryByText("Admin")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    expect(screen.getByText("header for Bob Builder")).toBeInTheDocument();
+    expect(screen.getAllByRole("figure")).toHaveLength(10);
   });
 
-  it("marks admins and handles a missing name", async () => {
+  it("handles a missing name", async () => {
     auth.mockResolvedValue({
       user: { id: "u2", email: "alice@example.com", roles: ["shoutout-admin"] },
     });
     render(await HomePage());
     expect(screen.getByRole("heading", { name: /hi there/i })).toBeInTheDocument();
-    expect(screen.getByText("Admin")).toBeInTheDocument();
   });
 });

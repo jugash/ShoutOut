@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { signOutEverywhere } from "@/app/actions/auth";
-import { isAdmin } from "@/server/auth/roles";
+import { DEFAULT_CARD_DESIGNS } from "@/components/cards/designs";
+import { CardTile } from "@/components/cards/card-tile";
+import { AppHeader } from "@/components/layout/app-header";
 
 export default async function HomePage() {
   const session = await auth();
@@ -9,31 +10,32 @@ export default async function HomePage() {
     redirect("/signin");
   }
   const { user } = session;
+  const firstName = user.name?.split(" ")[0] ?? "there";
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
-        <span className="text-2xl font-extrabold">
-          Shout<span className="text-teal">Out</span>
-        </span>
-        <form action={signOutEverywhere}>
-          <button
-            type="submit"
-            className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-surface"
-          >
-            Sign out
-          </button>
-        </form>
-      </header>
-      <section className="rounded-3xl border border-border bg-surface p-8">
-        <h1 className="text-3xl font-extrabold">Hi {user.name?.split(" ")[0] ?? "there"} 👋</h1>
-        <p className="mt-2 text-muted">You&apos;re signed in as {user.email}.</p>
-        {isAdmin(user.roles) && (
-          <p className="mt-4 inline-block rounded-full bg-teal/15 px-3 py-1 text-sm font-bold text-teal-strong">
-            Admin
+    <>
+      <AppHeader user={user} />
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6">
+        <section className="rounded-[var(--radius-card)] border-2 border-border bg-surface p-6 shadow-card sm:p-10">
+          <h1 className="font-display text-3xl font-semibold sm:text-4xl">Hi {firstName} 👋</h1>
+          <p className="mt-2 text-lg text-muted">Who made your day better recently?</p>
+          <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-sunny-soft px-4 py-2 text-sm font-bold dark:text-sunny">
+            Sending shoutouts is coming soon
           </p>
-        )}
-      </section>
-    </main>
+        </section>
+        <section aria-labelledby="cards-heading">
+          <h2 id="cards-heading" className="font-display text-2xl font-semibold">
+            Pick a card, say thanks
+          </h2>
+          <ul className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            {DEFAULT_CARD_DESIGNS.map((design) => (
+              <li key={design.slug}>
+                <CardTile design={design} className="h-full" />
+              </li>
+            ))}
+          </ul>
+        </section>
+      </main>
+    </>
   );
 }

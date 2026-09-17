@@ -1,46 +1,184 @@
 @import "tailwindcss";
 
-/* ShoutOut brand tokens (warm & friendly). Expanded in the branding milestone. */
+/* `dark:` follows the user's chosen theme, falling back to the OS preference. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+/*
+ * ShoutOut design tokens — warm & friendly.
+ * Theme: light by default, dark via OS preference unless the user picked
+ * a theme (html[data-theme="light" | "dark"]).
+ */
 :root {
-  --background: #fffaf0;
+  color-scheme: light;
+
+  --background: #fff8ec;
   --surface: #ffffff;
+  --surface-muted: #fff1d6;
   --foreground: #2b2a33;
   --muted: #6b6878;
-  --sunny: #ffc845;
-  --sunny-strong: #f5a623;
-  --teal: #2fa4a0;
-  --teal-strong: #1f7f7c;
-  --border: #f0e6d2;
+  --border: #f0e3c8;
+  --ring: #2a9d98;
+
+  --sunny: #ffc23d;
+  --sunny-strong: #f5a300;
+  --sunny-soft: #ffe8b0;
+  --on-sunny: #2b2a33;
+
+  --teal: #2a9d98;
+  --teal-strong: #1d7a76;
+  --teal-soft: #d3f0ed;
+
+  --coral: #ff7a6b;
+  --coral-strong: #d9503f;
+  --coral-soft: #ffe1dc;
+
+  --lilac: #9b8cf2;
+  --lilac-strong: #6c5bd4;
+  --lilac-soft: #ebe7ff;
+
+  --sky: #5ab0f0;
+  --sky-strong: #2a7fbf;
+  --sky-soft: #ddeffd;
+
+  --leaf: #5dbb63;
+  --leaf-strong: #3a8a40;
+  --leaf-soft: #def3df;
+
+  --ink: #2b2a33;
+  --paper: #fffdf8;
+  --line: #2b2a33;
+
+  --shadow-card: 0 1px 2px rgb(43 42 51 / 0.06), 0 8px 24px -12px rgb(43 42 51 / 0.18);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #1c1b22;
-    --surface: #26252e;
-    --foreground: #f5f1e8;
-    --muted: #b3afc0;
-    --sunny: #ffd36b;
-    --sunny-strong: #ffc845;
-    --teal: #5cc6c1;
-    --teal-strong: #8fdcd8;
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --background: #1b1a21;
+    --surface: #25242d;
+    --surface-muted: #2f2d38;
+    --foreground: #f6f1e7;
+    --muted: #b3aec2;
     --border: #3a3845;
+    --ring: #5fc9c3;
+    --sunny: #ffcd5c;
+    --sunny-strong: #ffc23d;
+    --sunny-soft: #4a3b17;
+    --teal: #5fc9c3;
+    --teal-strong: #8eddd8;
+    --teal-soft: #173f3d;
+    --coral: #ff9588;
+    --coral-strong: #ffb4aa;
+    --coral-soft: #4a2622;
+    --lilac: #b3a8ff;
+    --lilac-strong: #cfc7ff;
+    --lilac-soft: #2f2a52;
+    --sky: #7ec3f5;
+    --sky-strong: #a9d7f8;
+    --sky-soft: #1d3548;
+    --leaf: #7fd085;
+    --leaf-strong: #a6e0aa;
+    --leaf-soft: #213d24;
+    --paper: #f6f1e7;
+    --line: #121117;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #1b1a21;
+  --surface: #25242d;
+  --surface-muted: #2f2d38;
+  --foreground: #f6f1e7;
+  --muted: #b3aec2;
+  --border: #3a3845;
+  --ring: #5fc9c3;
+  --sunny: #ffcd5c;
+  --sunny-strong: #ffc23d;
+  --sunny-soft: #4a3b17;
+  --teal: #5fc9c3;
+  --teal-strong: #8eddd8;
+  --teal-soft: #173f3d;
+  --coral: #ff9588;
+  --coral-strong: #ffb4aa;
+  --coral-soft: #4a2622;
+  --lilac: #b3a8ff;
+  --lilac-strong: #cfc7ff;
+  --lilac-soft: #2f2a52;
+  --sky: #7ec3f5;
+  --sky-strong: #a9d7f8;
+  --sky-soft: #1d3548;
+  --leaf: #7fd085;
+  --leaf-strong: #a6e0aa;
+  --leaf-soft: #213d24;
+  --paper: #f6f1e7;
+  --line: #121117;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+
   --color-sunny: var(--sunny);
   --color-sunny-strong: var(--sunny-strong);
+  --color-sunny-soft: var(--sunny-soft);
+  --color-on-sunny: var(--on-sunny);
   --color-teal: var(--teal);
   --color-teal-strong: var(--teal-strong);
-  --color-border: var(--border);
-  --font-sans: var(--font-nunito);
+  --color-teal-soft: var(--teal-soft);
+  --color-coral: var(--coral);
+  --color-coral-strong: var(--coral-strong);
+  --color-coral-soft: var(--coral-soft);
+  --color-lilac: var(--lilac);
+  --color-lilac-strong: var(--lilac-strong);
+  --color-lilac-soft: var(--lilac-soft);
+  --color-sky: var(--sky);
+  --color-sky-strong: var(--sky-strong);
+  --color-sky-soft: var(--sky-soft);
+  --color-leaf: var(--leaf);
+  --color-leaf-strong: var(--leaf-strong);
+  --color-leaf-soft: var(--leaf-soft);
+
+  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fredoka), var(--font-nunito), ui-rounded, sans-serif;
+
+  --shadow-card: var(--shadow-card);
+  --radius-card: 1.5rem;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
