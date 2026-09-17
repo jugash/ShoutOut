@@ -78,6 +78,16 @@ Keycloak admin console password:
 kubectl -n shoutout get secret shoutout-secrets -o jsonpath='{.data.keycloak-admin-password}' | base64 -d
 ```
 
+## Admin
+
+Users with the Keycloak role `shoutout-admin` get an **Admin** area:
+
+- **Moderation** – reported shoutouts are hidden straight away; restore or remove them.
+- **Cards** – create cards from the built-in illustrations and colours, edit, reorder, retire.
+- **Values** – add, rename, reorder and retire company values.
+- **Export** – CSV downloads of shoutouts, a per-person summary and leaderboards.
+- **Audit log** – who reported, moderated, changed or exported what.
+
 ## Configuration
 
 | Env var                                    | Helm value                               | Default          | Meaning                                                                                  |

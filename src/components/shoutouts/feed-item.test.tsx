@@ -40,6 +40,7 @@ const item: FeedItem = {
   ],
   commentCount: 0,
   canModify: false,
+  canReport: true,
 };
 
 describe("FeedItemCard", () => {
@@ -67,12 +68,23 @@ describe("FeedItemCard", () => {
     expect(screen.queryByText("Private")).not.toBeInTheDocument();
     expect(screen.queryByText(/edited/)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Report" })).toHaveAttribute(
+      "href",
+      "/shoutouts/s1/report",
+    );
   });
 
   it("marks private and edited shoutouts and offers edit/delete to the sender", () => {
     render(
       <FeedItemCard
-        item={{ ...item, visibility: "PRIVATE", editedAt: now, canModify: true, commentCount: 1 }}
+        item={{
+          ...item,
+          visibility: "PRIVATE",
+          editedAt: now,
+          canModify: true,
+          canReport: false,
+          commentCount: 1,
+        }}
         viewerName="Alice Anders"
         now={now}
       />,

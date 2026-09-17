@@ -98,7 +98,8 @@ export function findCardDesign(slug: string): CardDesign | undefined {
   return DEFAULT_CARD_DESIGNS.find((card) => card.slug === slug);
 }
 
-const TONES = Object.keys(TONE_CLASSES) as CardTone[];
+export const CARD_TONES = Object.keys(TONE_CLASSES) as CardTone[];
+const TONES = CARD_TONES;
 
 /** Turns a stored card into a design, falling back safely for unknown artwork or tones. */
 export function toCardDesign(card: {

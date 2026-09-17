@@ -23,6 +23,8 @@ export interface FeedItem {
   reactions: ReactionSummary[];
   commentCount: number;
   canModify: boolean;
+  /** Anyone except the sender can report a shoutout. */
+  canReport: boolean;
 }
 
 export interface FeedFilters {
@@ -61,6 +63,7 @@ type ShoutoutWithRelations = Prisma.ShoutoutGetPayload<{ include: typeof include
 export function visibleTo(viewerId: string): Prisma.ShoutoutWhereInput {
   return {
     deletedAt: null,
+    moderationStatus: "VISIBLE",
     OR: [
       { visibility: "PUBLIC" },
       { senderId: viewerId },
@@ -101,6 +104,7 @@ function toFeedItem(row: ShoutoutWithRelations, viewerId: string, now: Date): Fe
     reactions: summarizeReactions(row.reactions, viewerId),
     commentCount: row._count.comments,
     canModify: canModify(row, viewerId, now),
+    canReport: row.senderId !== viewerId,
   };
 }
 

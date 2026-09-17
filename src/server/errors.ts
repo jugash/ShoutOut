@@ -6,7 +6,11 @@ export type DomainErrorCode =
   | "CARD_NOT_FOUND"
   | "VALUE_NOT_FOUND"
   | "BUDGET_EXCEEDED"
-  | "EDIT_WINDOW_CLOSED";
+  | "EDIT_WINDOW_CLOSED"
+  | "ALREADY_REPORTED"
+  | "DUPLICATE"
+  | "LAST_ACTIVE"
+  | "INVALID_STATE";
 
 /** An expected business-rule failure whose message is safe to show to the user. */
 export class DomainError extends Error {

@@ -11,6 +11,12 @@ export async function signInAs(page: Page, username: string) {
   await page.locator("#username").fill(username);
   await page.locator("#password").fill(DEMO_PASSWORD);
   await page.locator("#kc-login").click();
+  // Wait for the Keycloak callback to finish (session cookie set) before the
+  // test navigates elsewhere, otherwise the sign-in is cancelled.
+  await page.waitForURL(
+    (url) => url.hostname !== "auth.localtest.me" && !url.pathname.startsWith("/api/auth"),
+  );
+  await expect(page.getByRole("link", { name: "Your profile" })).toBeVisible();
 }
 
 /** Picks a card/value/visibility option by clicking its visible label, like a user would. */

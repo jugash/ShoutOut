@@ -28,7 +28,7 @@ gifts — recognition only.
 - **Profile wall** — received / sent shoutouts and top values.
 - **People search** with @mentions.
 - **Leaderboards** — see decisions above.
-- **Admin** — manage cards and values, moderation queue (hide/remove reported shoutouts, audit log), analytics dashboard (trends, participation, value distribution, people not recognised recently), CSV export.
+- **Admin** (`/admin`) — moderation queue, cards, values, CSV exports and audit log (see decisions above). Analytics lives at `/analytics`.
 
 ## Milestones
 

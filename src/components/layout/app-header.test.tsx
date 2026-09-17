@@ -32,6 +32,7 @@ describe("AppHeader", () => {
     );
     expect(screen.getByText("Bob Baker")).toBeInTheDocument();
     expect(screen.queryByText("Admin")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Feed" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
   });
 
@@ -42,7 +43,8 @@ describe("AppHeader", () => {
       }),
     );
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
-    expect(screen.getByText("Admin")).toBeInTheDocument();
+    expect(screen.getByText("Admin", { selector: "p" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Admin" })).toHaveAttribute("href", "/admin");
     expect(screen.getByRole("link", { name: "Analytics" })).toHaveAttribute("href", "/analytics");
   });
 });

@@ -125,6 +125,7 @@ export function getUnrecognised(db: Db, since: Date, limit = 50): Promise<Unreco
     FROM users u
     LEFT JOIN shoutout_recipients r ON r.user_id = u.id
     LEFT JOIN shoutouts s ON s.id = r.shoutout_id AND s.deleted_at IS NULL
+      AND s.moderation_status = 'VISIBLE'
     WHERE u.active
     GROUP BY u.id, u.name, u.email
     HAVING MAX(s.created_at) IS NULL OR MAX(s.created_at) < ${since}

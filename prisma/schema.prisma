@@ -25,6 +25,9 @@ model User {
   received  ShoutoutRecipient[]
   reactions Reaction[]
   comments  Comment[]
+  reports   Report[]   @relation("Reporter")
+  resolved  Report[]   @relation("Resolver")
+  auditLogs AuditLog[]
 
   @@index([active, name])
   @@map("users")
@@ -70,6 +73,15 @@ enum Visibility {
   PRIVATE
 }
 
+enum ModerationStatus {
+  /// Normal.
+  VISIBLE
+  /// Reported and hidden until an admin reviews it.
+  HIDDEN
+  /// Removed by an admin after review.
+  REMOVED
+}
+
 model Shoutout {
   id         String     @id @default(cuid())
   senderId   String     @map("sender_id")
@@ -82,6 +94,7 @@ model Shoutout {
   editedAt   DateTime?  @map("edited_at")
   /// Set when the sender deletes it; deleted shoutouts are hidden and refund budget.
   deletedAt  DateTime?  @map("deleted_at")
+  moderationStatus ModerationStatus @default(VISIBLE) @map("moderation_status")
 
   sender     User                @relation("SentShoutouts", fields: [senderId], references: [id])
   card       Card                @relation(fields: [cardId], references: [id])
@@ -89,6 +102,7 @@ model Shoutout {
   recipients ShoutoutRecipient[]
   reactions  Reaction[]
   comments   Comment[]
+  reports    Report[]
 
   @@index([createdAt(sort: Desc), id])
   @@index([senderId, createdAt])
@@ -136,4 +150,53 @@ model Comment {
 
   @@index([shoutoutId, createdAt])
   @@map("comments")
+}
+
+enum ReportReason {
+  INAPPROPRIATE
+  OFFENSIVE
+  SPAM
+  OTHER
+}
+
+enum ReportResolution {
+  RESTORED
+  REMOVED
+}
+
+/// Someone flagged a shoutout. The shoutout is hidden until an admin resolves it.
+model Report {
+  id           String            @id @default(cuid())
+  shoutoutId   String            @map("shoutout_id")
+  reporterId   String            @map("reporter_id")
+  reason       ReportReason
+  note         String?           @db.VarChar(500)
+  createdAt    DateTime          @default(now()) @map("created_at")
+  resolvedAt   DateTime?         @map("resolved_at")
+  resolution   ReportResolution?
+  resolvedById String?           @map("resolved_by_id")
+
+  shoutout   Shoutout @relation(fields: [shoutoutId], references: [id], onDelete: Cascade)
+  reporter   User     @relation("Reporter", fields: [reporterId], references: [id])
+  resolvedBy User?    @relation("Resolver", fields: [resolvedById], references: [id])
+
+  @@unique([shoutoutId, reporterId])
+  @@index([resolvedAt, createdAt])
+  @@map("reports")
+}
+
+/// Who did what in the admin area and moderation.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String   @map("actor_id")
+  action     String
+  targetType String   @map("target_type")
+  targetId   String   @map("target_id")
+  details    Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
 }

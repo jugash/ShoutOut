@@ -94,7 +94,11 @@ describe("profiles (postgres)", () => {
   });
 
   it("builds visibility rules", () => {
-    expect(profileVisibility("a", "b")).toEqual({ deletedAt: null, visibility: "PUBLIC" });
+    expect(profileVisibility("a", "b")).toEqual({
+      deletedAt: null,
+      moderationStatus: "VISIBLE",
+      visibility: "PUBLIC",
+    });
     expect(profileVisibility("a", "a")).toHaveProperty("OR");
   });
 });

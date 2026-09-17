@@ -5,19 +5,27 @@ import type { EditShoutoutInput } from "./validation";
 export const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export function canModify(
-  shoutout: { senderId: string; createdAt: Date; deletedAt?: Date | null },
+  shoutout: {
+    senderId: string;
+    createdAt: Date;
+    deletedAt?: Date | null;
+    moderationStatus?: string;
+  },
   userId: string,
   now = new Date(),
 ): boolean {
   return (
     !shoutout.deletedAt &&
+    (shoutout.moderationStatus ?? "VISIBLE") === "VISIBLE" &&
     shoutout.senderId === userId &&
     now.getTime() - shoutout.createdAt.getTime() <= EDIT_WINDOW_MS
   );
 }
 
 async function loadModifiable(db: Db, userId: string, id: string, now: Date) {
-  const shoutout = await db.shoutout.findFirst({ where: { id, deletedAt: null } });
+  const shoutout = await db.shoutout.findFirst({
+    where: { id, deletedAt: null, moderationStatus: "VISIBLE" },
+  });
   if (!shoutout) throw new DomainError("NOT_FOUND", "That shoutout doesn't exist");
   if (shoutout.senderId !== userId) {
     throw new DomainError("FORBIDDEN", "Only the sender can change this shoutout");

@@ -16,8 +16,13 @@ vi.mock("next/cache", () => ({ revalidatePath }));
 vi.mock("@/lib/db", () => ({ getDb: () => ({ db: true }) }));
 vi.mock("@/server/shoutouts/send", () => ({ sendShoutout }));
 vi.mock("@/server/shoutouts/manage", () => ({ updateShoutout, deleteShoutout }));
+const reportShoutout = vi.fn();
+vi.mock("@/server/admin/moderation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/server/admin/moderation")>()),
+  reportShoutout,
+}));
 
-const { sendShoutoutAction, updateShoutoutAction, deleteShoutoutAction } =
+const { sendShoutoutAction, updateShoutoutAction, deleteShoutoutAction, reportShoutoutAction } =
   await import("./shoutouts");
 
 const idle = { status: "idle" } as const;
@@ -170,6 +175,30 @@ describe("shoutout actions", () => {
     it("rethrows unexpected errors", async () => {
       deleteShoutout.mockRejectedValue(new Error("boom"));
       await expect(deleteShoutoutAction("s1")).rejects.toThrow("boom");
+    });
+  });
+  describe("reportShoutoutAction", () => {
+    it("reports and returns to the feed", async () => {
+      await expect(
+        reportShoutoutAction("s1", idle, form({ reason: "SPAM", note: " dup " })),
+      ).rejects.toThrow("NEXT_REDIRECT /?notice=reported");
+      expect(reportShoutout).toHaveBeenCalledWith({ db: true }, "u1", "s1", {
+        reason: "SPAM",
+        note: "dup",
+      });
+    });
+
+    it("validates and reports business errors", async () => {
+      expect(await reportShoutoutAction("s1", idle, form({}))).toMatchObject({
+        status: "error",
+        fieldErrors: { reason: "Pick a reason" },
+      });
+      reportShoutout.mockRejectedValueOnce(new DomainError("ALREADY_REPORTED", "Already"));
+      expect(await reportShoutoutAction("s1", idle, form({ reason: "OTHER" }))).toEqual({
+        status: "error",
+        message: "Already",
+        fieldErrors: {},
+      });
     });
   });
 });

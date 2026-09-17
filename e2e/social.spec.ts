@@ -140,7 +140,8 @@ test.describe("social", () => {
 
   test("filter the feed by text, value and person", async ({ page }) => {
     const message = e2eMessage("Unicorn-level spreadsheet wizardry");
-    await signInAs(page, "dave");
+    // Not "dave": the budget refund test owns that user so its counts stay exact.
+    await signInAs(page, "bob");
     await sendShoutout(page, { to: ["Erin Evans"], value: "Engagement", message });
 
     await page.getByText("Search & filter").click();

@@ -69,6 +69,14 @@ export function FeedItemCard({
                   : `${item.commentCount} comment${item.commentCount === 1 ? "" : "s"}`}
               </Link>
             )}
+            {item.canReport && (
+              <Link
+                href={`/shoutouts/${item.id}/report`}
+                className={buttonClasses({ variant: "ghost", size: "sm", className: "text-muted" })}
+              >
+                Report
+              </Link>
+            )}
             {item.canModify && (
               <>
                 <Link

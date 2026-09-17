@@ -17,7 +17,9 @@ export interface Profile {
  * shoutouts; on your own profile you also see private ones.
  */
 export function profileVisibility(viewerId: string, personId: string): Prisma.ShoutoutWhereInput {
-  return viewerId === personId ? visibleTo(viewerId) : { deletedAt: null, visibility: "PUBLIC" };
+  return viewerId === personId
+    ? visibleTo(viewerId)
+    : { deletedAt: null, moderationStatus: "VISIBLE", visibility: "PUBLIC" };
 }
 
 function tabWhere(personId: string, tab: ProfileTab): Prisma.ShoutoutWhereInput {

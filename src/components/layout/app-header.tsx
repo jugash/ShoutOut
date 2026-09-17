@@ -15,6 +15,19 @@ export interface HeaderUser {
   roles: string[];
 }
 
+/** Main navigation; phones show just the icons. */
+export function navItems(user: HeaderUser) {
+  return [
+    { href: "/", label: "Feed", icon: "🏠" },
+    { href: "/people", label: "People", icon: "👥" },
+    { href: "/leaderboard", label: "Leaderboard", icon: "🏆" },
+    ...(isAdmin(user.roles) ? [{ href: "/admin", label: "Admin", icon: "🛡️" }] : []),
+    ...(canViewAnalytics(user.roles, loadConfig().analyticsVisibility)
+      ? [{ href: "/analytics", label: "Analytics", icon: "📊" }]
+      : []),
+  ];
+}
+
 export async function AppHeader({ user }: { user: HeaderUser }) {
   const theme = await getThemePreference();
   return (
@@ -26,35 +39,18 @@ export async function AppHeader({ user }: { user: HeaderUser }) {
             <Logo className="hidden h-9 sm:block" />
           </Link>
           <nav aria-label="Main" className="flex text-sm font-bold sm:gap-1">
-            <Link href="/" className="rounded-full px-2 py-1.5 hover:bg-surface-muted sm:px-3">
-              Feed
-            </Link>
-            <Link
-              href="/people"
-              className="rounded-full px-2 py-1.5 hover:bg-surface-muted sm:px-3"
-            >
-              People
-            </Link>
-            <Link
-              href="/leaderboard"
-              className="rounded-full px-2 py-1.5 hover:bg-surface-muted sm:px-3"
-            >
-              <span className="sm:hidden" aria-hidden>
-                🏆
-              </span>
-              <span className="sr-only sm:not-sr-only">Leaderboard</span>
-            </Link>
-            {canViewAnalytics(user.roles, loadConfig().analyticsVisibility) && (
+            {navItems(user).map((item) => (
               <Link
-                href="/analytics"
+                key={item.href}
+                href={item.href}
                 className="rounded-full px-2 py-1.5 hover:bg-surface-muted sm:px-3"
               >
                 <span className="sm:hidden" aria-hidden>
-                  📊
+                  {item.icon}
                 </span>
-                <span className="sr-only sm:not-sr-only">Analytics</span>
+                <span className="sr-only sm:not-sr-only">{item.label}</span>
               </Link>
-            )}
+            ))}
           </nav>
         </div>
         <div className="flex items-center gap-1 sm:gap-3">

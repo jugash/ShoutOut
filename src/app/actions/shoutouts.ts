@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { loadConfig } from "@/lib/config";
 import { getDb } from "@/lib/db";
+import { reportSchema, reportShoutout } from "@/server/admin/moderation";
 import { DomainError } from "@/server/errors";
 import { deleteShoutout, updateShoutout } from "@/server/shoutouts/manage";
 import { sendShoutout } from "@/server/shoutouts/send";
@@ -96,4 +97,26 @@ export async function deleteShoutoutAction(id: string): Promise<void> {
   }
   revalidatePath("/");
   redirect(`/?notice=${notice}`);
+}
+
+export async function reportShoutoutAction(
+  id: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const userId = await requireUserId();
+  const parsed = reportSchema.safeParse({
+    reason: text(formData, "reason"),
+    note: text(formData, "note"),
+  });
+  if (!parsed.success) {
+    return { status: "error", message: INVALID, fieldErrors: fieldErrors(parsed.error) };
+  }
+  try {
+    await reportShoutout(getDb(), userId, id, parsed.data);
+  } catch (error) {
+    return domainFailure(error);
+  }
+  revalidatePath("/", "layout");
+  redirect("/?notice=reported");
 }

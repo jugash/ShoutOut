@@ -23,7 +23,10 @@ export default function globalSetup() {
         "-d",
         "shoutout",
         "-c",
-        "DELETE FROM shoutouts WHERE message LIKE '%[e2e]%'",
+        "DELETE FROM shoutouts WHERE message LIKE '%[e2e]%'; " +
+          "DELETE FROM cards WHERE title LIKE 'E2E %'; " +
+          "DELETE FROM company_values WHERE name LIKE 'E2E %'; " +
+          "DELETE FROM audit_logs WHERE details::text LIKE '%E2E %'",
       ],
       { stdio: "pipe" },
     );

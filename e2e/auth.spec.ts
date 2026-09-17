@@ -11,7 +11,7 @@ test.describe("authentication", () => {
   test("a user signs in with Keycloak and signs out everywhere", async ({ page }) => {
     await signInAs(page, "bob");
     await expect(page.getByRole("heading", { name: /hi bob/i })).toBeVisible();
-    await expect(page.getByText("Admin", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Admin" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Send a shoutout" })).toBeVisible();
 
     // Let the page finish hydrating so the click reaches the sign-out action.
@@ -27,6 +27,6 @@ test.describe("authentication", () => {
   test("admins are recognised from Keycloak roles", async ({ page }) => {
     await signInAs(page, "alice");
     await expect(page.getByRole("heading", { name: /hi alice/i })).toBeVisible();
-    await expect(page.getByText("Admin", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Admin" })).toBeVisible();
   });
 });

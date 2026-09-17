@@ -19,7 +19,7 @@ export interface Board {
 }
 
 function rangeSql(range: DateRange): Prisma.Sql {
-  const parts = [Prisma.sql`s.deleted_at IS NULL`];
+  const parts = [Prisma.sql`s.deleted_at IS NULL`, Prisma.sql`s.moderation_status = 'VISIBLE'`];
   if (range.start) parts.push(Prisma.sql`s.created_at >= ${range.start}`);
   if (range.end) parts.push(Prisma.sql`s.created_at < ${range.end}`);
   return Prisma.join(parts, " AND ");
