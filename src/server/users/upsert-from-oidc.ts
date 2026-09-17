@@ -15,6 +15,17 @@ export function displayName(profile: OidcProfile): string {
   return profile.name || fromParts || profile.preferred_username || profile.email || "Unknown";
 }
 
+/**
+ * Finds the local user for a Keycloak account. Falls back to email so a user
+ * whose Keycloak id changed (e.g. realm re-created) keeps their history.
+ */
+export async function findByKeycloakIdOrEmail(db: Db, keycloakId: string, email: string) {
+  return (
+    (await db.user.findUnique({ where: { keycloakId }, select: { id: true } })) ??
+    (await db.user.findUnique({ where: { email }, select: { id: true } }))
+  );
+}
+
 /** Creates or refreshes the local user record for someone who just signed in. */
 export async function upsertUserFromOidc(db: Db, profile: OidcProfile, now = new Date()) {
   if (!profile.sub || !profile.email) {
@@ -27,9 +38,12 @@ export async function upsertUserFromOidc(db: Db, profile: OidcProfile, now = new
     active: true,
     lastLoginAt: now,
   };
-  return db.user.upsert({
-    where: { keycloakId: profile.sub },
-    create: { keycloakId: profile.sub, ...data },
-    update: data,
-  });
+  const existing = await findByKeycloakIdOrEmail(db, profile.sub, data.email);
+  if (existing) {
+    return db.user.update({
+      where: { id: existing.id },
+      data: { keycloakId: profile.sub, ...data },
+    });
+  }
+  return db.user.create({ data: { keycloakId: profile.sub, ...data } });
 }

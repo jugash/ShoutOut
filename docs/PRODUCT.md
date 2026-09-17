@@ -22,13 +22,13 @@ gifts — recognition only.
 
 - **Send shoutout** — recipients, card, company value, message, public/private.
 - **Cards** — 10 illustrated defaults: Thank You, Above & Beyond, Team Player / Helping Hand, Innovator / Great Idea, Welcome Aboard, Congrats, Customer Hero, Problem Solver, Mentor, Crushed It.
-- **Company values** — defaults: Teamwork, Customer First, Ownership, Innovation, Integrity (admin-managed).
+- **Company values** — Integrity, Diversity, Excellence, Collaboration, Engagement (admin-managed from milestone 6).
 - **Feed** — company-wide feed, filters by person, value, card and date.
 - **Reactions & comments** on shoutouts.
 - **Profile wall** — received / sent shoutouts and top values.
 - **People search** with @mentions.
 - **Leaderboards** — see decisions above.
-- **Admin** — manage cards and values, budget size, moderation queue (hide/remove reported shoutouts, audit log), analytics dashboard (trends, participation, value distribution, people not recognised recently), CSV export.
+- **Admin** — manage cards and values, moderation queue (hide/remove reported shoutouts, audit log), analytics dashboard (trends, participation, value distribution, people not recognised recently), CSV export.
 
 ## Milestones
 

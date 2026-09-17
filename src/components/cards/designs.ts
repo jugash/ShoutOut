@@ -1,4 +1,4 @@
-import type { IllustrationName } from "./illustrations";
+import { isIllustrationName, type IllustrationName } from "./illustrations";
 
 export type CardTone = "coral" | "lilac" | "teal" | "sunny" | "sky" | "leaf";
 
@@ -96,4 +96,23 @@ export const TONE_CLASSES: Record<CardTone, { soft: string; strong: string; bord
 
 export function findCardDesign(slug: string): CardDesign | undefined {
   return DEFAULT_CARD_DESIGNS.find((card) => card.slug === slug);
+}
+
+const TONES = Object.keys(TONE_CLASSES) as CardTone[];
+
+/** Turns a stored card into a design, falling back safely for unknown artwork or tones. */
+export function toCardDesign(card: {
+  slug: string;
+  title: string;
+  tagline: string;
+  illustration: string;
+  tone: string;
+}): CardDesign {
+  return {
+    slug: card.slug,
+    title: card.title,
+    tagline: card.tagline,
+    illustration: isIllustrationName(card.illustration) ? card.illustration : "heart",
+    tone: (TONES as string[]).includes(card.tone) ? (card.tone as CardTone) : "coral",
+  };
 }

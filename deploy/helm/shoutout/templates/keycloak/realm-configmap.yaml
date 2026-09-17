@@ -1,7 +1,12 @@
 {{- if .Values.keycloak.enabled }}
 {{- $realm := .Values.keycloak.realm -}}
 {{- $appUrl := .Values.appUrl | trimSuffix "/" -}}
-{{- $users := list -}}
+{{- /* The client's service account may list users for the ShoutOut people sync. */ -}}
+{{- $users := list (dict
+      "username" (printf "service-account-%s" .Values.auth.clientId)
+      "enabled" true
+      "serviceAccountClientId" .Values.auth.clientId
+      "clientRoles" (dict "realm-management" (list "view-users"))) -}}
 {{- if $realm.seedDemoUsers }}
 {{- if not $realm.demoUserPassword }}
 {{- fail "keycloak.realm.demoUserPassword is required when seedDemoUsers=true" }}
@@ -45,6 +50,7 @@
       "clientAuthenticatorType" "client-secret"
       "secret" "${SHOUTOUT_CLIENT_SECRET}"
       "standardFlowEnabled" true
+      "serviceAccountsEnabled" true
       "directAccessGrantsEnabled" false
       "implicitFlowEnabled" false
       "rootUrl" $appUrl

@@ -1,7 +1,9 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaClient, type Prisma } from "@/generated/prisma/client";
 
 export type Db = PrismaClient;
+/** Either the client or an interactive transaction. */
+export type DbClient = PrismaClient | Prisma.TransactionClient;
 
 export function createDb(connectionString: string | undefined): Db {
   if (!connectionString) {

@@ -41,6 +41,8 @@ deploy/local/deploy.sh
 
 This creates the `shoutout` k3d cluster if needed, builds the app and migration
 images, loads them into the cluster, installs the Helm chart and runs `helm test`.
+Keycloak only imports the realm on first start; after changing realm settings run
+`RESET_KEYCLOAK_REALM=1 deploy/local/deploy.sh` to re-import it (local only).
 
 | URL                          | What                        |
 | ---------------------------- | --------------------------- |
@@ -55,6 +57,19 @@ Keycloak admin console password:
 ```bash
 kubectl -n shoutout get secret shoutout-secrets -o jsonpath='{.data.keycloak-admin-password}' | base64 -d
 ```
+
+## Configuration
+
+| Env var | Helm value | Default | Meaning |
+| --- | --- | --- | --- |
+| `SHOUTOUT_QUARTERLY_BUDGET` | `config.quarterlyBudget` | `20` | Shoutouts per person per calendar quarter (each recipient uses one) |
+| `SHOUTOUT_MAX_RECIPIENTS` | `config.maxRecipients` | `5` | Most people in one shoutout |
+| `SHOUTOUT_SYNC_ON_STARTUP` | `userSync.onStartup` | `true` | Sync people from Keycloak when the app starts |
+| – | `userSync.schedule` | `0 * * * *` | CronJob schedule for the Keycloak people sync |
+| `SHOUTOUT_SYNC_TOKEN` | `secrets.syncToken` | generated | Bearer token for `POST /api/internal/sync-users` |
+| `AUTH_KEYCLOAK_ISSUER` / `_ID` / `_SECRET` | `auth.*`, `secrets.keycloakClientSecret` | bundled Keycloak | OIDC client; its service account needs realm-management `view-users` for the people sync |
+
+Example: `helm upgrade shoutout deploy/helm/shoutout --reuse-values --set config.quarterlyBudget=30`
 
 ## Helm chart
 

@@ -1,0 +1,123 @@
+import { describe, expect, it, vi } from "vitest";
+import { useTestDb } from "../../../test/db";
+import { createUser } from "../../../test/factories";
+import type { KeycloakUser } from "./keycloak-admin";
+import { isSyncable, runKeycloakSync, syncCredentialsFromEnv, syncUsers } from "./sync-users";
+
+const kc = (overrides: Partial<KeycloakUser> & { id: string }): KeycloakUser => ({
+  username: overrides.id,
+  email: `${overrides.id}@example.com`,
+  firstName: "First",
+  lastName: overrides.id,
+  enabled: true,
+  ...overrides,
+});
+
+describe("isSyncable", () => {
+  it("skips service accounts and users without email", () => {
+    expect(isSyncable(kc({ id: "a" }))).toBe(true);
+    expect(isSyncable(kc({ id: "b", email: undefined }))).toBe(false);
+    expect(isSyncable(kc({ id: "c", username: "service-account-shoutout-web" }))).toBe(false);
+  });
+});
+
+describe("syncCredentialsFromEnv", () => {
+  it("needs issuer, client id and secret", () => {
+    const env = {
+      AUTH_KEYCLOAK_ISSUER: "http://kc/realms/r",
+      AUTH_KEYCLOAK_ID: "id",
+      AUTH_KEYCLOAK_SECRET: "s",
+    };
+    expect(syncCredentialsFromEnv(env)).toEqual({
+      issuer: "http://kc/realms/r",
+      clientId: "id",
+      clientSecret: "s",
+    });
+    expect(syncCredentialsFromEnv({ ...env, AUTH_KEYCLOAK_SECRET: "" })).toBeNull();
+    expect(syncCredentialsFromEnv({ ...env, AUTH_KEYCLOAK_ID: undefined })).toBeNull();
+    expect(syncCredentialsFromEnv({ ...env, AUTH_KEYCLOAK_ISSUER: undefined })).toBeNull();
+    expect(syncCredentialsFromEnv()).toBeDefined();
+  });
+});
+
+describe("syncUsers (postgres)", () => {
+  const db = useTestDb();
+
+  it("creates, updates, relinks by email and deactivates users", async () => {
+    const existing = await db.user.create({
+      data: { keycloakId: "kc-bob", email: "bob@example.com", name: "Old Bob" },
+    });
+    const relinked = await db.user.create({
+      data: { keycloakId: "old-carol-id", email: "carol@example.com", name: "Carol" },
+    });
+    const leaver = await createUser(db, { name: "Leaver" });
+
+    const result = await syncUsers(db, [
+      kc({ id: "kc-alice", email: "Alice@Example.com", firstName: "Alice", lastName: "Anders" }),
+      kc({
+        id: "kc-bob",
+        email: "bob@example.com",
+        firstName: "Bob",
+        lastName: "Baker",
+        enabled: false,
+      }),
+      kc({ id: "new-carol-id", email: "carol@example.com", firstName: "Carol", lastName: "Chen" }),
+      kc({ id: "svc", username: "service-account-shoutout-web" }),
+      kc({ id: "no-email", email: undefined }),
+      kc({
+        id: "kc-dave",
+        username: "dave",
+        email: "dave@example.com",
+        firstName: undefined,
+        lastName: undefined,
+      }),
+    ]);
+
+    expect(result).toEqual({ created: 2, updated: 2, deactivated: 1, skipped: 2 });
+    expect(await db.user.findUnique({ where: { keycloakId: "kc-alice" } })).toMatchObject({
+      email: "alice@example.com",
+      name: "Alice Anders",
+      active: true,
+    });
+    expect(await db.user.findUnique({ where: { id: existing.id } })).toMatchObject({
+      name: "Bob Baker",
+      active: false,
+    });
+    expect(await db.user.findUnique({ where: { id: relinked.id } })).toMatchObject({
+      keycloakId: "new-carol-id",
+      name: "Carol Chen",
+    });
+    expect((await db.user.findUnique({ where: { keycloakId: "kc-dave" } }))?.name).toBe("dave");
+    expect((await db.user.findUnique({ where: { id: leaver.id } }))?.active).toBe(false);
+  });
+
+  it("skips users that clash and never deactivates everyone on an empty list", async () => {
+    await db.user.create({ data: { keycloakId: "kc-1", email: "one@example.com", name: "One" } });
+    await db.user.create({ data: { keycloakId: "kc-2", email: "two@example.com", name: "Two" } });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    // kc-1 now claims kc-2's email: the update clashes on the unique email.
+    const result = await syncUsers(db, [kc({ id: "kc-1", email: "two@example.com" })]);
+    expect(result.skipped).toBe(1);
+    expect(warn).toHaveBeenCalledOnce();
+
+    expect(await syncUsers(db, [])).toEqual({ created: 0, updated: 0, deactivated: 0, skipped: 0 });
+    expect(await db.user.count({ where: { active: true } })).toBe(1);
+  });
+
+  it("runs a full sync through Keycloak's APIs", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ access_token: "t" }))
+      .mockResolvedValueOnce(
+        Response.json([kc({ id: "kc-zoe", firstName: "Zoe", lastName: "Z" })]),
+      );
+    const result = await runKeycloakSync(
+      db,
+      { issuer: "http://kc/realms/r", clientId: "id", clientSecret: "s" },
+      fetchImpl,
+    );
+    expect(result.created).toBe(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+});

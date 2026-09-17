@@ -6,13 +6,33 @@ fullnameOverride: ""
 
 # Shared secrets. Leave empty to auto-generate on install; generated values are
 # kept on upgrade. Or point `existingSecret` at a secret with the same keys:
-#   auth-secret, keycloak-client-secret, postgres-password, keycloak-admin-password
+#   auth-secret, keycloak-client-secret, postgres-password, keycloak-admin-password, sync-token
 secrets:
   existingSecret: ""
   authSecret: ""
   keycloakClientSecret: ""
   postgresPassword: ""
   keycloakAdminPassword: ""
+  syncToken: ""
+
+# ShoutOut behaviour (passed to the app as environment variables).
+config:
+  # -- Shoutouts each person can send per calendar quarter; each recipient uses one (SHOUTOUT_QUARTERLY_BUDGET).
+  quarterlyBudget: 20
+  # -- Maximum recipients in one shoutout (SHOUTOUT_MAX_RECIPIENTS).
+  maxRecipients: 5
+
+# Sync people from Keycloak so everyone can be recognised before they first sign in.
+# The Keycloak client's service account needs the realm-management "view-users" role.
+userSync:
+  enabled: true
+  # -- Sync once when the app starts.
+  onStartup: true
+  # -- CronJob schedule for regular syncs.
+  schedule: "0 * * * *"
+  image:
+    repository: docker.io/library/busybox
+    tag: "1.37"
 
 app:
   replicaCount: 1

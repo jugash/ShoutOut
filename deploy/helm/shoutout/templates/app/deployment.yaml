@@ -81,6 +81,17 @@ spec:
                   key: keycloak-client-secret
             - name: AUTH_KEYCLOAK_ISSUER
               value: {{ include "shoutout.auth.issuer" . | quote }}
+            - name: SHOUTOUT_QUARTERLY_BUDGET
+              value: {{ .Values.config.quarterlyBudget | int | quote }}
+            - name: SHOUTOUT_MAX_RECIPIENTS
+              value: {{ .Values.config.maxRecipients | int | quote }}
+            - name: SHOUTOUT_SYNC_ON_STARTUP
+              value: {{ and .Values.userSync.enabled .Values.userSync.onStartup | quote }}
+            - name: SHOUTOUT_SYNC_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "shoutout.secretName" . }}
+                  key: sync-token
             {{- with .Values.app.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

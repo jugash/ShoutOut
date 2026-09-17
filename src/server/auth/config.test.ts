@@ -6,10 +6,12 @@ import type { Db } from "@/lib/db";
 import { buildAuthConfig, SESSION_MAX_AGE_SECONDS } from "./config";
 
 function fakeDb() {
+  // A first sign-in: no existing user, so one is created.
   const upsert = vi
     .fn()
     .mockResolvedValue({ id: "user-1", name: "Alice Admin", email: "alice@example.com" });
-  return { db: { user: { upsert } } as unknown as Db, upsert };
+  const user = { findUnique: vi.fn().mockResolvedValue(null), create: upsert, update: upsert };
+  return { db: { user } as unknown as Db, upsert };
 }
 
 function request(pathname: string) {

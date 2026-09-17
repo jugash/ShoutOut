@@ -46,3 +46,23 @@ describe("ShoutoutCard", () => {
     expect(card).toHaveClass("mt-2");
   });
 });
+
+describe("ShoutoutCard slots and layout", () => {
+  it("renders meta and actions and supports the horizontal layout", () => {
+    render(
+      <ShoutoutCard
+        layout="horizontal"
+        design={findCardDesign("mentor")!}
+        from="Bob"
+        to={["Dave"]}
+        message={"Line one\nLine two"}
+        meta={<span>2h ago</span>}
+        actions={<button type="button">Edit</button>}
+      />,
+    );
+    const card = screen.getByRole("article");
+    expect(card).toHaveClass("sm:flex");
+    expect(screen.getByText("2h ago")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+});

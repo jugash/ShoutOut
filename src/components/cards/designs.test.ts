@@ -24,3 +24,18 @@ describe("card designs", () => {
     expect(findCardDesign("nope")).toBeUndefined();
   });
 });
+
+describe("toCardDesign", () => {
+  it("keeps known artwork and tones", async () => {
+    const { toCardDesign } = await import("./designs");
+    const card = { slug: "x", title: "X", tagline: "t", illustration: "rocket", tone: "sky" };
+    expect(toCardDesign(card)).toEqual(card);
+  });
+
+  it("falls back for unknown artwork and tones", async () => {
+    const { toCardDesign } = await import("./designs");
+    expect(
+      toCardDesign({ slug: "x", title: "X", tagline: "t", illustration: "unicorn", tone: "neon" }),
+    ).toMatchObject({ illustration: "heart", tone: "coral" });
+  });
+});

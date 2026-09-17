@@ -1,0 +1,52 @@
+{{- if .Values.userSync.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "shoutout.fullname" . }}-user-sync
+  labels:
+    {{- include "shoutout.labels" (dict "ctx" $ "component" "user-sync") | nindent 4 }}
+spec:
+  schedule: {{ .Values.userSync.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            {{- include "shoutout.selectorLabels" (dict "ctx" $ "component" "user-sync") | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: sync
+              image: "{{ .Values.userSync.image.repository }}:{{ .Values.userSync.image.tag }}"
+              command:
+                - sh
+                - -c
+                - >-
+                  wget -qO- --post-data=''
+                  --header "Authorization: Bearer $SYNC_TOKEN"
+                  http://{{ include "shoutout.fullname" . }}-app:{{ .Values.app.service.port }}/api/internal/sync-users
+              env:
+                - name: SYNC_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "shoutout.secretName" . }}
+                      key: sync-token
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                requests: { cpu: 10m, memory: 16Mi }
+                limits: { memory: 32Mi }
+{{- end }}
