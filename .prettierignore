@@ -1,0 +1,7 @@
+src/generated
+coverage
+playwright-report
+test-results
+deploy/helm
+package-lock.json
+.next

@@ -1,0 +1,31 @@
+{{- if .Values.app.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "shoutout.fullname" . }}-app
+  labels:
+    {{- include "shoutout.labels" (dict "ctx" $ "component" "app") | nindent 4 }}
+  {{- with .Values.app.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.app.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.app.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.app.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "shoutout.fullname" . }}-app
+                port:
+                  name: http
+{{- end }}

@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "shoutout.fullname" . }}-app
+  labels:
+    {{- include "shoutout.labels" (dict "ctx" $ "component" "app") | nindent 4 }}
+spec:
+  replicas: {{ .Values.app.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "shoutout.selectorLabels" (dict "ctx" $ "component" "app") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "shoutout.selectorLabels" (dict "ctx" $ "component" "app") | nindent 8 }}
+      annotations:
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        {{- with .Values.app.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.app.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.app.hostAliases }}
+      hostAliases:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: migrate
+          image: {{ include "shoutout.migrations.image" . }}
+          imagePullPolicy: {{ .Values.app.migrations.image.pullPolicy }}
+          # Retries while the database is still starting.
+          command:
+            - sh
+            - -c
+            - |
+              for i in $(seq 1 30); do
+                node node_modules/prisma/build/index.js migrate deploy && exit 0
+                echo "migrate failed (attempt $i), retrying in 5s"; sleep 5
+              done
+              exit 1
+          env:
+            {{- include "shoutout.databaseUrlEnv" . | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+      containers:
+        - name: app
+          image: {{ include "shoutout.app.image" . }}
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            {{- include "shoutout.databaseUrlEnv" . | nindent 12 }}
+            - name: AUTH_URL
+              value: {{ .Values.appUrl | trimSuffix "/" | quote }}
+            - name: AUTH_TRUST_HOST
+              value: "true"
+            - name: AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "shoutout.secretName" . }}
+                  key: auth-secret
+            - name: AUTH_KEYCLOAK_ID
+              value: {{ .Values.auth.clientId | quote }}
+            - name: AUTH_KEYCLOAK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "shoutout.secretName" . }}
+                  key: keycloak-client-secret
+            - name: AUTH_KEYCLOAK_ISSUER
+              value: {{ include "shoutout.auth.issuer" . | quote }}
+            {{- with .Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet: { path: /api/health, port: http }
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /api/ready, port: http }
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: next-cache
+              mountPath: /app/.next/cache
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.app.resources | nindent 12 }}
+      volumes:
+        - name: next-cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.app.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.app.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.app.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

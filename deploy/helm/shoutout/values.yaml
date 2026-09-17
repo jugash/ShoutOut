@@ -1,0 +1,101 @@
+# -- Public URL of the ShoutOut web app (used for Auth.js callbacks and Keycloak redirects).
+appUrl: http://shoutout.localtest.me
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Shared secrets. Leave empty to auto-generate on install; generated values are
+# kept on upgrade. Or point `existingSecret` at a secret with the same keys:
+#   auth-secret, keycloak-client-secret, postgres-password, keycloak-admin-password
+secrets:
+  existingSecret: ""
+  authSecret: ""
+  keycloakClientSecret: ""
+  postgresPassword: ""
+  keycloakAdminPassword: ""
+
+app:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/jugash/shoutout
+    tag: ""            # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+  migrations:
+    image:
+      repository: ghcr.io/jugash/shoutout-migrate
+      tag: ""          # defaults to app.image.tag
+      pullPolicy: IfNotPresent
+  imagePullSecrets: []
+  podAnnotations: {}
+  extraEnv: []
+  hostAliases: []
+  resources:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { memory: 512Mi }
+  service:
+    port: 80
+  ingress:
+    enabled: true
+    className: traefik
+    annotations: {}
+    host: shoutout.localtest.me
+    tls: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Authentication (Keycloak OIDC).
+auth:
+  clientId: shoutout-web
+  # -- Issuer URL. Defaults to the bundled Keycloak: <keycloak.url>/realms/<realm>.
+  issuer: ""
+
+# Database used by the app.
+database:
+  name: shoutout
+  # -- Used only when postgres.enabled=false: full connection string, or a secret holding it.
+  url: ""
+  existingSecret: ""
+  existingSecretKey: database-url
+
+postgres:
+  enabled: true
+  image:
+    repository: docker.io/library/postgres
+    tag: 17-alpine
+    pullPolicy: IfNotPresent
+  username: shoutout
+  persistence:
+    size: 2Gi
+    storageClass: ""
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+
+keycloak:
+  enabled: true
+  image:
+    repository: quay.io/keycloak/keycloak
+    tag: "26.7.4"
+    pullPolicy: IfNotPresent
+  # -- Public URL of Keycloak (browser-facing and used as the token issuer).
+  url: http://auth.localtest.me
+  adminUsername: admin
+  database: keycloak
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits: { memory: 1Gi }
+  ingress:
+    enabled: true
+    className: traefik
+    annotations: {}
+    host: auth.localtest.me
+    tls: []
+  realm:
+    name: shoutout
+    displayName: ShoutOut
+    # -- "external" (HTTPS except private networks), "all", or "none" for plain-HTTP local clusters.
+    sslRequired: external
+    # -- Seed demo users (see files/demo-users.yaml). Never enable in production.
+    seedDemoUsers: false
+    demoUserPassword: ""

@@ -1,0 +1,31 @@
+{{- if and .Values.keycloak.enabled .Values.keycloak.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "shoutout.fullname" . }}-keycloak
+  labels:
+    {{- include "shoutout.labels" (dict "ctx" $ "component" "keycloak") | nindent 4 }}
+  {{- with .Values.keycloak.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.keycloak.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.keycloak.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.keycloak.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "shoutout.fullname" . }}-keycloak
+                port:
+                  name: http
+{{- end }}

@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// A person who can send or receive shoutouts. Mirrors a Keycloak user.
+model User {
+  id          String    @id @default(cuid())
+  /// Keycloak subject (user id). Stable even if email/name change.
+  keycloakId  String    @unique @map("keycloak_id")
+  email       String    @unique
+  name        String
+  avatarUrl   String?   @map("avatar_url")
+  /// False when the user is disabled or removed in Keycloak.
+  active      Boolean   @default(true)
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}

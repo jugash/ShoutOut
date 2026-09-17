@@ -1,0 +1,9 @@
+# Demo users seeded into the Keycloak realm when keycloak.realm.seedDemoUsers=true.
+- { username: alice, firstName: Alice, lastName: Anders, admin: true }
+- { username: bob, firstName: Bob, lastName: Baker }
+- { username: carol, firstName: Carol, lastName: Chen }
+- { username: dave, firstName: Dave, lastName: Diaz }
+- { username: erin, firstName: Erin, lastName: Evans }
+- { username: frank, firstName: Frank, lastName: Fischer }
+- { username: grace, firstName: Grace, lastName: Gupta }
+- { username: henry, firstName: Henry, lastName: Hughes }

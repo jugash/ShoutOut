@@ -1,0 +1,72 @@
+{{- if .Values.keycloak.enabled }}
+{{- $realm := .Values.keycloak.realm -}}
+{{- $appUrl := .Values.appUrl | trimSuffix "/" -}}
+{{- $users := list -}}
+{{- if $realm.seedDemoUsers }}
+{{- if not $realm.demoUserPassword }}
+{{- fail "keycloak.realm.demoUserPassword is required when seedDemoUsers=true" }}
+{{- end }}
+{{- range (.Files.Get "files/demo-users.yaml" | fromYamlArray) }}
+{{- $roles := list "default-roles-shoutout" }}
+{{- if .admin }}{{- $roles = append $roles "shoutout-admin" }}{{- end }}
+{{- $users = append $users (dict
+      "username" .username
+      "email" (printf "%s@shoutout.local" .username)
+      "firstName" .firstName
+      "lastName" .lastName
+      "enabled" true
+      "emailVerified" true
+      "realmRoles" $roles
+      "credentials" (list (dict "type" "password" "value" $realm.demoUserPassword "temporary" false))) }}
+{{- end }}
+{{- end }}
+{{- $realmJson := dict
+  "realm" $realm.name
+  "displayName" $realm.displayName
+  "enabled" true
+  "sslRequired" $realm.sslRequired
+  "registrationAllowed" false
+  "loginWithEmailAllowed" true
+  "duplicateEmailsAllowed" false
+  "resetPasswordAllowed" false
+  "bruteForceProtected" true
+  "roles" (dict "realm" (list
+      (dict "name" "shoutout-user" "description" "Can send and receive shoutouts")
+      (dict "name" "shoutout-admin" "description" "Manages cards, values, moderation and analytics" "composite" true "composites" (dict "realm" (list "shoutout-user")))
+      (dict "name" "default-roles-shoutout" "description" "Default roles for new users" "composite" true "composites" (dict "realm" (list "shoutout-user")))
+  ))
+  "defaultRole" (dict "name" "default-roles-shoutout")
+  "clients" (list (dict
+      "clientId" .Values.auth.clientId
+      "name" "ShoutOut"
+      "enabled" true
+      "protocol" "openid-connect"
+      "publicClient" false
+      "clientAuthenticatorType" "client-secret"
+      "secret" "${SHOUTOUT_CLIENT_SECRET}"
+      "standardFlowEnabled" true
+      "directAccessGrantsEnabled" false
+      "implicitFlowEnabled" false
+      "rootUrl" $appUrl
+      "baseUrl" "/"
+      "redirectUris" (list (printf "%s/api/auth/callback/keycloak" $appUrl))
+      "webOrigins" (list $appUrl)
+      "attributes" (dict "post.logout.redirect.uris" (printf "%s/*" $appUrl) "pkce.code.challenge.method" "S256")
+      "protocolMappers" (list (dict
+          "name" "realm roles"
+          "protocol" "openid-connect"
+          "protocolMapper" "oidc-usermodel-realm-role-mapper"
+          "config" (dict "multivalued" "true" "claim.name" "roles" "jsonType.label" "String" "id.token.claim" "true" "access.token.claim" "true" "userinfo.token.claim" "true")))
+  ))
+  "users" $users
+-}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "shoutout.fullname" . }}-keycloak-realm
+  labels:
+    {{- include "shoutout.labels" (dict "ctx" $ "component" "keycloak") | nindent 4 }}
+data:
+  {{ $realm.name }}-realm.json: |
+    {{- toPrettyJson $realmJson | nindent 4 }}
+{{- end }}
