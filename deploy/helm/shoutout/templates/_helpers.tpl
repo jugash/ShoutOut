@@ -144,3 +144,14 @@ readOnlyRootFilesystem: true
 capabilities:
   drop: ["ALL"]
 {{- end }}
+
+{{/*
+Checksum of a ConfigMap/Secret template's contents only, for "restart on change"
+annotations. Hashing the whole manifest would include labels such as the chart
+version, restarting pods (including PostgreSQL) on every chart upgrade.
+Call with (dict "ctx" $ "template" "/postgres/initdb-configmap.yaml")
+*/}}
+{{- define "shoutout.contentChecksum" -}}
+{{- $manifest := include (print .ctx.Template.BasePath .template) .ctx | fromYaml | default dict -}}
+{{- pick $manifest "data" "stringData" "binaryData" | toYaml | sha256sum -}}
+{{- end }}

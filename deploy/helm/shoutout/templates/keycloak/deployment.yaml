@@ -18,7 +18,7 @@ spec:
       labels:
         {{- include "shoutout.selectorLabels" (dict "ctx" $ "component" "keycloak") | nindent 8 }}
       annotations:
-        checksum/realm: {{ include (print $.Template.BasePath "/keycloak/realm-configmap.yaml") . | sha256sum }}
+        checksum/realm: {{ include "shoutout.contentChecksum" (dict "ctx" $ "template" "/keycloak/realm-configmap.yaml") }}
     spec:
       securityContext:
         {{- include "shoutout.podSecurityContext" (dict "ctx" $) | nindent 8 }}

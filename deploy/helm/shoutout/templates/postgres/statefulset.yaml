@@ -16,7 +16,7 @@ spec:
       labels:
         {{- include "shoutout.selectorLabels" (dict "ctx" $ "component" "postgres") | nindent 8 }}
       annotations:
-        checksum/initdb: {{ include (print $.Template.BasePath "/postgres/initdb-configmap.yaml") . | sha256sum }}
+        checksum/initdb: {{ include "shoutout.contentChecksum" (dict "ctx" $ "template" "/postgres/initdb-configmap.yaml") }}
     spec:
       securityContext:
         {{- include "shoutout.podSecurityContext" (dict "ctx" $ "runAsUser" 70 "runAsGroup" 70 "fsGroup" 70) | nindent 8 }}
