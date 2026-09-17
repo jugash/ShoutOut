@@ -5,13 +5,14 @@ test.describe("authentication", () => {
   test("anonymous visitors are sent to the sign-in page", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveURL(/\/signin/);
-    await expect(page.getByRole("heading", { name: "ShoutOut" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "ShoutOut" }).first()).toBeVisible();
   });
 
   test("a user signs in with Keycloak and signs out everywhere", async ({ page }) => {
     await signInAs(page, "bob");
     await expect(page.getByRole("heading", { name: /hi bob/i })).toBeVisible();
     await expect(page.getByText("Admin", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("figure")).toHaveCount(10);
 
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/signin/);

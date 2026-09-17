@@ -9,20 +9,23 @@ vi.mock("@/auth", () => ({ auth }));
 vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("@/app/actions/auth", () => ({ signInWithKeycloak: vi.fn() }));
 
-const { default: SignInPage } = await import("./page");
+const { default: SignInPage, metadata } = await import("./page");
 
 describe("SignInPage", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("shows the sign-in button to anonymous visitors", async () => {
+  it("shows the brand, pitch and sign-in button to anonymous visitors", async () => {
     auth.mockResolvedValue(null);
     render(await SignInPage());
-    expect(screen.getByRole("heading", { name: "ShoutOut" })).toBeInTheDocument();
+    expect(metadata.title).toBe("Sign in");
+    expect(screen.getByRole("img", { name: "ShoutOut" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /recognise the people/i })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /sign in with your work account/i }),
     ).toBeInTheDocument();
+    expect(screen.getAllByRole("figure", { hidden: true })).toHaveLength(3);
   });
 
   it("sends signed-in users home", async () => {
