@@ -132,6 +132,48 @@ app:
   ingress: { className: nginx, host: shoutout.example.com, tls: [...] }
 ```
 
+### Installing the published chart
+
+CI publishes the chart as an OCI artifact after the image for the same commit:
+
+```bash
+helm install shoutout oci://ghcr.io/opentooling/charts/shoutout -f my-values.yaml
+helm show values oci://ghcr.io/opentooling/charts/shoutout      # all settings
+```
+
+Chart versions are `<major.minor from Chart.yaml>.<CI run number>`, so a plain
+install gets the newest. Each chart's `appVersion` (the default image tag) is
+the `sha-<commit>` image built from the same commit. Pin with `--version`.
+
+### OpenShift
+
+Set `openshift.enabled: true` to run under the `restricted-v2` SCC. Pods then
+omit fixed `runAsUser`/`runAsGroup`/`fsGroup` so OpenShift assigns them from the
+namespace range; every container already runs non-root with all capabilities
+dropped, no privilege escalation and the `RuntimeDefault` seccomp profile, and
+all images work with an arbitrary UID. Ingresses are turned into Routes by
+OpenShift; to control Routes directly, disable the ingresses and add Routes via
+`extraObjects`.
+
+### Extra objects
+
+`extraObjects` deploys additional manifests with the release, such as custom
+resources your platform needs (their CRDs must already be installed). Items may
+be YAML objects or strings, and are rendered with `tpl`:
+
+```yaml
+extraObjects:
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: '{{ include "shoutout.fullname" $ }}-app'
+    spec:
+      host: shoutout.apps.example.com
+      to: { kind: Service, name: '{{ include "shoutout.fullname" $ }}-app' }
+      port: { targetPort: http }
+      tls: { termination: edge }
+```
+
 ## Container image
 
 CI publishes a multi-arch (amd64 + arm64) image to

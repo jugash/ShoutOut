@@ -19,12 +19,7 @@ spec:
         checksum/initdb: {{ include (print $.Template.BasePath "/postgres/initdb-configmap.yaml") . | sha256sum }}
     spec:
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 70
-        runAsGroup: 70
-        fsGroup: 70
-        seccompProfile:
-          type: RuntimeDefault
+        {{- include "shoutout.podSecurityContext" (dict "ctx" $ "runAsUser" 70 "runAsGroup" 70 "fsGroup" 70) | nindent 8 }}
       containers:
         - name: postgres
           image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
@@ -54,9 +49,7 @@ spec:
             periodSeconds: 20
             initialDelaySeconds: 30
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
+            {{- include "shoutout.containerSecurityContext" dict | nindent 12 }}
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data

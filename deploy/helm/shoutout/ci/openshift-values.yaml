@@ -1,0 +1,20 @@
+# CI lint/render check: OpenShift restricted-v2 mode plus extraObjects in both forms.
+openshift:
+  enabled: true
+extraObjects:
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: '{{ include "shoutout.fullname" $ }}-app'
+    spec:
+      host: shoutout.apps.example.com
+      to: { kind: Service, name: '{{ include "shoutout.fullname" $ }}-app' }
+      port: { targetPort: http }
+      tls: { termination: edge, insecureEdgeTerminationPolicy: Redirect }
+  - |
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: {{ include "shoutout.fullname" $ }}-extra
+    data:
+      budget: "{{ .Values.config.quarterlyBudget }}"

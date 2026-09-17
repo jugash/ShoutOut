@@ -21,10 +21,7 @@ spec:
         spec:
           restartPolicy: Never
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 65534
-            seccompProfile:
-              type: RuntimeDefault
+            {{- include "shoutout.podSecurityContext" (dict "ctx" $ "runAsUser" 65534) | nindent 12 }}
           containers:
             - name: sync
               image: "{{ .Values.userSync.image.repository }}:{{ .Values.userSync.image.tag }}"
@@ -42,10 +39,7 @@ spec:
                       name: {{ include "shoutout.secretName" . }}
                       key: sync-token
               securityContext:
-                allowPrivilegeEscalation: false
-                readOnlyRootFilesystem: true
-                capabilities:
-                  drop: ["ALL"]
+                {{- include "shoutout.containerSecurityContext" (dict "readOnlyRootFilesystem" true) | nindent 16 }}
               resources:
                 requests: { cpu: 10m, memory: 16Mi }
                 limits: { memory: 32Mi }

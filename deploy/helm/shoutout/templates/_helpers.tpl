@@ -109,3 +109,38 @@ Call with (dict "ctx" $ "key" "auth-secret" "value" .Values.secrets.authSecret)
 {{- fail (printf "config.analyticsVisibility must be \"admins\" or \"everyone\", got %q" .Values.config.analyticsVisibility) }}
 {{- end }}
 {{- end }}
+
+{{/*
+Pod securityContext. Fixed IDs are left out on OpenShift, where the restricted-v2
+SCC assigns runAsUser/fsGroup from the namespace's range (and rejects others).
+Call with (dict "ctx" $ "runAsUser" 70 "runAsGroup" 70 "fsGroup" 70); IDs are optional.
+*/}}
+{{- define "shoutout.podSecurityContext" -}}
+runAsNonRoot: true
+{{- if not .ctx.Values.openshift.enabled }}
+{{- with .runAsUser }}
+runAsUser: {{ . }}
+{{- end }}
+{{- with .runAsGroup }}
+runAsGroup: {{ . }}
+{{- end }}
+{{- with .fsGroup }}
+fsGroup: {{ . }}
+{{- end }}
+{{- end }}
+seccompProfile:
+  type: RuntimeDefault
+{{- end }}
+
+{{/*
+Container securityContext meeting the restricted Pod Security Standard (and restricted-v2).
+Call with (dict "readOnlyRootFilesystem" true), or an empty dict.
+*/}}
+{{- define "shoutout.containerSecurityContext" -}}
+allowPrivilegeEscalation: false
+{{- if .readOnlyRootFilesystem }}
+readOnlyRootFilesystem: true
+{{- end }}
+capabilities:
+  drop: ["ALL"]
+{{- end }}

@@ -29,9 +29,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
+        {{- include "shoutout.podSecurityContext" (dict "ctx" $) | nindent 8 }}
       initContainers:
         - name: migrate
           image: {{ include "shoutout.app.image" . }}
@@ -41,9 +39,7 @@ spec:
           env:
             {{- include "shoutout.databaseUrlEnv" . | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
+            {{- include "shoutout.containerSecurityContext" (dict "readOnlyRootFilesystem" true) | nindent 12 }}
           resources:
             requests: { cpu: 50m, memory: 128Mi }
             limits: { memory: 512Mi }
@@ -101,10 +97,7 @@ spec:
             httpGet: { path: /api/ready, port: http }
             periodSeconds: 10
           securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
+            {{- include "shoutout.containerSecurityContext" (dict "readOnlyRootFilesystem" true) | nindent 12 }}
           volumeMounts:
             - name: next-cache
               mountPath: /app/.next/cache

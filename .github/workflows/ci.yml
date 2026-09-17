@@ -48,6 +48,17 @@ jobs:
       - run: helm lint deploy/helm/shoutout
       - run: helm lint deploy/helm/shoutout -f deploy/local/values-local.yaml
       - run: helm template ci deploy/helm/shoutout -f deploy/local/values-local.yaml > /dev/null
+      - name: OpenShift restricted-v2 mode and extraObjects
+        run: |
+          values=deploy/helm/shoutout/ci/openshift-values.yaml
+          helm lint deploy/helm/shoutout -f "$values"
+          rendered="$(helm template ci deploy/helm/shoutout -f "$values")"
+          # restricted-v2 assigns UIDs itself and rejects pods that pin them.
+          if grep -En 'runAsUser|runAsGroup|fsGroup' <<< "$rendered"; then
+            echo "::error::OpenShift mode must not set fixed runAsUser/runAsGroup/fsGroup"; exit 1
+          fi
+          grep -q 'kind: Route' <<< "$rendered"
+          grep -q 'name: ci-shoutout-extra' <<< "$rendered"
 
   dependency-audit:
     name: Dependency vulnerabilities (npm audit)
@@ -186,3 +197,38 @@ jobs:
             $(printf '${{ env.IMAGE_NAME }}@sha256:%s ' *)
       - name: Show published image
         run: docker buildx imagetools inspect "${{ env.IMAGE_NAME }}:sha-${{ github.sha }}"
+
+  publish-chart:
+    name: Publish Helm chart to GHCR
+    # Runs after the image exists, so the chart's default image tag always resolves.
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      CHART_REGISTRY: oci://ghcr.io/opentooling/charts
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+      - name: Package chart
+        id: package
+        run: |
+          # Chart version: major.minor from Chart.yaml, patch = CI run number (so a plain
+          # `helm install` gets the newest). appVersion = the image tag built from this commit.
+          base="$(sed -n 's/^version: *\([0-9]*\.[0-9]*\)\..*/\1/p' deploy/helm/shoutout/Chart.yaml)"
+          version="$base.${{ github.run_number }}"
+          helm package deploy/helm/shoutout --version "$version" \
+            --app-version "sha-$(git rev-parse --short=7 HEAD)" --destination "$RUNNER_TEMP"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Push chart
+        run: |
+          echo "$REGISTRY_PASSWORD" | helm registry login ghcr.io -u "$REGISTRY_USER" --password-stdin
+          helm push "$RUNNER_TEMP/shoutout-${{ steps.package.outputs.version }}.tgz" "$CHART_REGISTRY"
+        env:
+          REGISTRY_USER: ${{ vars.GHCR_USERNAME || github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Show published chart
+        run: |
+          helm show chart "$CHART_REGISTRY/shoutout" --version "${{ steps.package.outputs.version }}"
+          echo "::notice::Published $CHART_REGISTRY/shoutout ${{ steps.package.outputs.version }}"

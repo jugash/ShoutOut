@@ -4,6 +4,37 @@ appUrl: http://shoutout.localtest.me
 nameOverride: ""
 fullnameOverride: ""
 
+openshift:
+  # -- Run under OpenShift's restricted-v2 SCC. Pods then set no fixed runAsUser,
+  # runAsGroup or fsGroup, so OpenShift assigns them from the namespace's UID range.
+  # All images used by the chart run as an arbitrary non-root UID. Ingresses still
+  # work (OpenShift turns them into Routes); for Route-specific settings, disable the
+  # ingresses and add Routes through extraObjects.
+  enabled: false
+
+# -- Extra Kubernetes objects to deploy with the release, e.g. custom resources.
+# Items can be YAML objects or strings; both are rendered with `tpl`, so template
+# expressions like {{ include "shoutout.fullname" $ }} and {{ .Release.Namespace }} work.
+# The CRDs for any custom resources must already be installed in the cluster.
+extraObjects: []
+#  - apiVersion: route.openshift.io/v1
+#    kind: Route
+#    metadata:
+#      name: '{{ include "shoutout.fullname" $ }}-app'
+#    spec:
+#      host: shoutout.apps.example.com
+#      to: { kind: Service, name: '{{ include "shoutout.fullname" $ }}-app' }
+#      port: { targetPort: http }
+#      tls: { termination: edge, insecureEdgeTerminationPolicy: Redirect }
+#  - |
+#    apiVersion: traefik.io/v1alpha1
+#    kind: Middleware
+#    metadata:
+#      name: {{ include "shoutout.fullname" $ }}-headers
+#    spec:
+#      headers:
+#        frameDeny: true
+
 # Shared secrets. Leave empty to auto-generate on install; generated values are
 # kept on upgrade. Or point `existingSecret` at a secret with the same keys:
 #   auth-secret, keycloak-client-secret, postgres-password, keycloak-admin-password, sync-token
