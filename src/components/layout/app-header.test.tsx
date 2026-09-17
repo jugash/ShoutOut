@@ -7,16 +7,23 @@ vi.mock("@/lib/theme-server", () => ({ getThemePreference: async () => "dark" })
 const { AppHeader } = await import("./app-header");
 
 describe("AppHeader", () => {
-  it("shows the logo, theme toggle, user and sign out", async () => {
+  it("shows the logo, navigation, theme toggle, profile link and sign out", async () => {
     render(
       await AppHeader({
-        user: { name: "Bob Baker", email: "bob@example.com", roles: ["shoutout-user"] },
+        user: { id: "u1", name: "Bob Baker", email: "bob@example.com", roles: ["shoutout-user"] },
       }),
     );
     expect(screen.getByRole("link", { name: "ShoutOut home" })).toHaveAttribute("href", "/");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(nav).toHaveTextContent("Feed");
+    expect(screen.getByRole("link", { name: "People" })).toHaveAttribute("href", "/people");
     expect(screen.getByRole("radio", { name: "Dark theme" })).toHaveAttribute(
       "aria-checked",
       "true",
+    );
+    expect(screen.getByRole("link", { name: "Your profile" })).toHaveAttribute(
+      "href",
+      "/people/u1",
     );
     expect(screen.getByText("Bob Baker")).toBeInTheDocument();
     expect(screen.queryByText("Admin")).not.toBeInTheDocument();
@@ -24,7 +31,11 @@ describe("AppHeader", () => {
   });
 
   it("labels admins and falls back to email", async () => {
-    render(await AppHeader({ user: { email: "alice@example.com", roles: ["shoutout-admin"] } }));
+    render(
+      await AppHeader({
+        user: { id: "u2", email: "alice@example.com", roles: ["shoutout-admin"] },
+      }),
+    );
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
     expect(screen.getByText("Admin")).toBeInTheDocument();
   });

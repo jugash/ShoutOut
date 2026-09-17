@@ -33,6 +33,19 @@ npm run test:e2e        # Playwright against http://shoutout.localtest.me
 Integration tests start PostgreSQL in a container via Testcontainers, so Docker
 or Podman must be running.
 
+### Security checks
+
+```bash
+npm run audit:deps                                   # npm audit, fails on high/critical
+scripts/security-scan.sh shoutout:tag shoutout-migrate:tag   # + Trivy image scan
+```
+
+`deploy/local/deploy.sh` runs both before deploying (skip with `SKIP_SECURITY_SCAN=1`).
+CI runs `npm audit` and a Trivy scan of both images on every PR and weekly, and
+Dependabot opens update PRs for npm packages, base images and GitHub Actions.
+Images drop npm/yarn from the runtime and apply Alpine security updates. Accepted
+findings go in `.trivyignore` with a reason and review date.
+
 ### Deploy to local Kubernetes (k3d)
 
 ```bash
@@ -60,13 +73,13 @@ kubectl -n shoutout get secret shoutout-secrets -o jsonpath='{.data.keycloak-adm
 
 ## Configuration
 
-| Env var | Helm value | Default | Meaning |
-| --- | --- | --- | --- |
-| `SHOUTOUT_QUARTERLY_BUDGET` | `config.quarterlyBudget` | `20` | Shoutouts per person per calendar quarter (each recipient uses one) |
-| `SHOUTOUT_MAX_RECIPIENTS` | `config.maxRecipients` | `5` | Most people in one shoutout |
-| `SHOUTOUT_SYNC_ON_STARTUP` | `userSync.onStartup` | `true` | Sync people from Keycloak when the app starts |
-| – | `userSync.schedule` | `0 * * * *` | CronJob schedule for the Keycloak people sync |
-| `SHOUTOUT_SYNC_TOKEN` | `secrets.syncToken` | generated | Bearer token for `POST /api/internal/sync-users` |
+| Env var                                    | Helm value                               | Default          | Meaning                                                                                  |
+| ------------------------------------------ | ---------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------- |
+| `SHOUTOUT_QUARTERLY_BUDGET`                | `config.quarterlyBudget`                 | `20`             | Shoutouts per person per calendar quarter (each recipient uses one)                      |
+| `SHOUTOUT_MAX_RECIPIENTS`                  | `config.maxRecipients`                   | `5`              | Most people in one shoutout                                                              |
+| `SHOUTOUT_SYNC_ON_STARTUP`                 | `userSync.onStartup`                     | `true`           | Sync people from Keycloak when the app starts                                            |
+| –                                          | `userSync.schedule`                      | `0 * * * *`      | CronJob schedule for the Keycloak people sync                                            |
+| `SHOUTOUT_SYNC_TOKEN`                      | `secrets.syncToken`                      | generated        | Bearer token for `POST /api/internal/sync-users`                                         |
 | `AUTH_KEYCLOAK_ISSUER` / `_ID` / `_SECRET` | `auth.*`, `secrets.keycloakClientSecret` | bundled Keycloak | OIDC client; its service account needs realm-management `view-users` for the people sync |
 
 Example: `helm upgrade shoutout deploy/helm/shoutout --reuse-values --set config.quarterlyBudget=30`

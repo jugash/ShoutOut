@@ -1,5 +1,6 @@
 import type { Db } from "@/lib/db";
 import type { Prisma, Visibility } from "@/generated/prisma/client";
+import { summarizeReactions, type ReactionSummary } from "@/lib/reactions";
 import { canModify } from "./manage";
 
 export interface FeedItem {
@@ -19,7 +20,22 @@ export interface FeedItem {
   value: { id: string; name: string };
   sender: { id: string; name: string };
   recipients: { id: string; name: string }[];
+  reactions: ReactionSummary[];
+  commentCount: number;
   canModify: boolean;
+}
+
+export interface FeedFilters {
+  /** Shoutouts this person sent or received. */
+  personId?: string;
+  valueId?: string;
+  cardId?: string;
+  /** Inclusive start of day (UTC). */
+  from?: Date;
+  /** Inclusive end day (UTC); everything before the following midnight. */
+  to?: Date;
+  /** Text in the message. */
+  query?: string;
 }
 
 const include = {
@@ -32,6 +48,11 @@ const include = {
     select: { user: { select: { id: true, name: true } } },
     orderBy: { user: { name: "asc" } },
   },
+  reactions: {
+    select: { emoji: true, userId: true, user: { select: { name: true } } },
+    orderBy: { createdAt: "asc" },
+  },
+  _count: { select: { comments: { where: { deletedAt: null } } } },
 } satisfies Prisma.ShoutoutInclude;
 
 type ShoutoutWithRelations = Prisma.ShoutoutGetPayload<{ include: typeof include }>;
@@ -48,6 +69,24 @@ export function visibleTo(viewerId: string): Prisma.ShoutoutWhereInput {
   };
 }
 
+export function involving(personId: string): Prisma.ShoutoutWhereInput {
+  return { OR: [{ senderId: personId }, { recipients: { some: { userId: personId } } }] };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function filtersWhere(filters: FeedFilters): Prisma.ShoutoutWhereInput[] {
+  const where: Prisma.ShoutoutWhereInput[] = [];
+  if (filters.personId) where.push(involving(filters.personId));
+  if (filters.valueId) where.push({ valueId: filters.valueId });
+  if (filters.cardId) where.push({ cardId: filters.cardId });
+  if (filters.from) where.push({ createdAt: { gte: filters.from } });
+  if (filters.to) where.push({ createdAt: { lt: new Date(filters.to.getTime() + DAY_MS) } });
+  const query = filters.query?.trim();
+  if (query) where.push({ message: { contains: query, mode: "insensitive" } });
+  return where;
+}
+
 function toFeedItem(row: ShoutoutWithRelations, viewerId: string, now: Date): FeedItem {
   return {
     id: row.id,
@@ -59,17 +98,26 @@ function toFeedItem(row: ShoutoutWithRelations, viewerId: string, now: Date): Fe
     value: row.value,
     sender: row.sender,
     recipients: row.recipients.map((r) => r.user),
+    reactions: summarizeReactions(row.reactions, viewerId),
+    commentCount: row._count.comments,
     canModify: canModify(row, viewerId, now),
   };
 }
 
-export async function listFeed(
+export interface Page {
+  items: FeedItem[];
+  nextCursor: string | null;
+}
+
+/** Newest-first shoutouts matching `where`, with cursor paging. */
+export async function listShoutouts(
   db: Db,
   viewerId: string,
+  where: Prisma.ShoutoutWhereInput,
   { cursor, limit = 20, now = new Date() }: { cursor?: string; limit?: number; now?: Date } = {},
-): Promise<{ items: FeedItem[]; nextCursor: string | null }> {
+): Promise<Page> {
   const rows = await db.shoutout.findMany({
-    where: visibleTo(viewerId),
+    where,
     include,
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit + 1,
@@ -81,6 +129,20 @@ export async function listFeed(
     items: page.map((row) => toFeedItem(row, viewerId, now)),
     nextCursor: hasMore ? page[page.length - 1].id : null,
   };
+}
+
+export function listFeed(
+  db: Db,
+  viewerId: string,
+  options: { cursor?: string; limit?: number; now?: Date; filters?: FeedFilters } = {},
+): Promise<Page> {
+  const { filters = {}, ...paging } = options;
+  return listShoutouts(
+    db,
+    viewerId,
+    { AND: [visibleTo(viewerId), ...filtersWhere(filters)] },
+    paging,
+  );
 }
 
 export async function getVisibleShoutout(

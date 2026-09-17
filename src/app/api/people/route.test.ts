@@ -23,13 +23,15 @@ describe("GET /api/people", () => {
     searchPeople.mockResolvedValue([{ id: "u2", name: "Bob", email: "bob@x" }]);
     const res = await GET(new Request(`http://app/api/people?q=${"b".repeat(150)}`));
     expect(await res.json()).toEqual({ people: [{ id: "u2", name: "Bob", email: "bob@x" }] });
-    expect(searchPeople).toHaveBeenCalledWith({ db: true }, "u1", "b".repeat(100));
+    expect(searchPeople).toHaveBeenCalledWith({ db: true }, "u1", "b".repeat(100), 8, {
+      includeSelf: false,
+    });
   });
 
-  it("treats a missing query as empty", async () => {
+  it("treats a missing query as empty and can include yourself", async () => {
     auth.mockResolvedValue({ user: { id: "u1" } });
     searchPeople.mockResolvedValue([]);
-    await GET(new Request("http://app/api/people"));
-    expect(searchPeople).toHaveBeenCalledWith({ db: true }, "u1", "");
+    await GET(new Request("http://app/api/people?self=1"));
+    expect(searchPeople).toHaveBeenCalledWith({ db: true }, "u1", "", 8, { includeSelf: true });
   });
 });

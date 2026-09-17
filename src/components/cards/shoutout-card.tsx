@@ -1,27 +1,55 @@
-import type { ReactNode } from "react";
+import Link from "next/link";
+import { Fragment, type ReactNode } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
 import { TONE_CLASSES, type CardDesign } from "./designs";
 import { CardIllustration } from "./illustrations";
 
+/** A person shown on a card, optionally linking to their profile. */
+export type PersonRef = string | { name: string; href: string };
+
 export interface ShoutoutCardProps {
   design: CardDesign;
   message: string;
-  from: string;
-  to: string[];
+  from: PersonRef;
+  to: PersonRef[];
   value?: string;
   className?: string;
   /** Shown next to the recipients, e.g. time and privacy. */
   meta?: ReactNode;
-  /** Shown under the card body, e.g. edit/delete buttons. */
+  /** Shown under the card body, e.g. reactions and edit/delete buttons. */
   actions?: ReactNode;
   /** "horizontal" puts the artwork beside the message on wider screens (used in the feed). */
   layout?: "stacked" | "horizontal";
 }
 
+function nameOf(person: PersonRef): string {
+  return typeof person === "string" ? person : person.name;
+}
+
 function joinNames(names: string[]): string {
   if (names.length <= 1) return names[0] ?? "";
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+function PersonName({ person }: { person: PersonRef }) {
+  if (typeof person === "string") {
+    return <span className="font-bold text-foreground">{person}</span>;
+  }
+  return (
+    <Link href={person.href} className="font-bold text-foreground hover:underline">
+      {person.name}
+    </Link>
+  );
+}
+
+function PeopleList({ people }: { people: PersonRef[] }) {
+  return people.map((person, index) => (
+    <Fragment key={`${nameOf(person)}-${index}`}>
+      {index > 0 && (index === people.length - 1 ? " and " : ", ")}
+      <PersonName person={person} />
+    </Fragment>
+  ));
 }
 
 export function ShoutoutCard({
@@ -39,7 +67,7 @@ export function ShoutoutCard({
   const tone = TONE_CLASSES[design.tone];
   return (
     <article
-      aria-label={`${design.title} from ${from} to ${joinNames(to)}`}
+      aria-label={`${design.title} from ${nameOf(from)} to ${joinNames(to.map(nameOf))}`}
       className={cn(
         "overflow-hidden rounded-[var(--radius-card)] border-2 border-border bg-surface shadow-card",
         horizontal && "sm:flex",
@@ -62,17 +90,17 @@ export function ShoutoutCard({
       <div className={cn("space-y-4 p-6", horizontal && "sm:min-w-0 sm:flex-1")}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted">
-            To <span className="font-bold text-foreground">{joinNames(to)}</span>
+            To <PeopleList people={to} />
           </p>
           {meta}
         </div>
         <p className="text-lg leading-relaxed break-words whitespace-pre-line">{message}</p>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Avatar name={from} size="sm" />
+            <Avatar name={nameOf(from)} size="sm" />
             <span className="text-sm">
               <span className="text-muted">From </span>
-              <span className="font-bold">{from}</span>
+              <PersonName person={from} />
             </span>
           </div>
           {value && (

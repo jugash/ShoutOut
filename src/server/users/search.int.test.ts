@@ -23,6 +23,9 @@ describe("searchPeople (postgres)", () => {
     expect(await names("acme")).toEqual([]);
     expect(await names("  ")).toEqual(["Beth", "Carol Chen", "Henry Hughes"]);
     expect(await names("", 1)).toEqual(["Beth"]);
+    expect(
+      (await searchPeople(db, viewer.id, "han", 8, { includeSelf: true })).map((p) => p.name),
+    ).toEqual(["Hannah Viewer"]);
     expect((await searchPeople(db, viewer.id, "henry"))[0]).toEqual({
       id: expect.any(String),
       name: "Henry Hughes",

@@ -16,12 +16,13 @@ export function searchPeople(
   viewerId: string,
   query: string,
   limit = 8,
+  { includeSelf = false }: { includeSelf?: boolean } = {},
 ): Promise<PersonSummary[]> {
   const q = query.trim();
   return db.user.findMany({
     where: {
       active: true,
-      id: { not: viewerId },
+      ...(includeSelf ? {} : { id: { not: viewerId } }),
       ...(q
         ? {
             OR: [

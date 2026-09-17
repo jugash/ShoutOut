@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    # Re-scan weekly so newly published vulnerabilities are caught without code changes.
+    - cron: "0 6 * * 1"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -43,25 +46,45 @@ jobs:
       - run: helm lint deploy/helm/shoutout -f deploy/local/values-local.yaml
       - run: helm template ci deploy/helm/shoutout -f deploy/local/values-local.yaml > /dev/null
 
-  image:
-    name: Build container images
+  dependency-audit:
+    name: Dependency vulnerabilities (npm audit)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fail on high or critical advisories
+        run: npm audit --audit-level=high
+
+  image:
+    name: Build and scan container images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: app
+            target: runner
+          - name: migrate
+            target: migrator
+    steps:
+      - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: App image
+      - name: Build ${{ matrix.name }} image
         uses: docker/build-push-action@v6
         with:
           context: .
+          target: ${{ matrix.target }}
           push: false
-          tags: shoutout:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      - name: Migrations image
-        uses: docker/build-push-action@v6
+          load: true
+          tags: shoutout-${{ matrix.name }}:ci
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - name: Trivy vulnerability scan (fails on fixable high/critical)
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
-          context: .
-          target: migrator
-          push: false
-          tags: shoutout-migrate:ci
-          cache-from: type=gha
+          image-ref: shoutout-${{ matrix.name }}:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore

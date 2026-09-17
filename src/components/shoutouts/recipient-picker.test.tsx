@@ -149,3 +149,34 @@ describe("fetchPeople", () => {
     await expect(fetchPeople("x", new AbortController().signal)).resolves.toEqual([]);
   });
 });
+
+describe("fetchPeopleIncludingSelf", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("asks the API to include the signed-in user", async () => {
+    const { fetchPeopleIncludingSelf } = await import("./recipient-picker");
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ people }));
+    vi.stubGlobal("fetch", fetchMock);
+    const signal = new AbortController().signal;
+    await expect(fetchPeopleIncludingSelf("me", signal)).resolves.toEqual(people);
+    expect(fetchMock).toHaveBeenCalledWith("/api/people?self=1&q=me", { signal });
+    fetchMock.mockResolvedValue(new Response("", { status: 401 }));
+    await expect(fetchPeopleIncludingSelf("me", signal)).resolves.toEqual([]);
+  });
+
+  it("supports a custom label without a hint", () => {
+    render(
+      <RecipientPicker
+        selected={[]}
+        onChange={() => {}}
+        max={1}
+        label="Person"
+        hint=""
+        name="person"
+      />,
+    );
+    expect(screen.getByRole("combobox", { name: "Person" })).toBeInTheDocument();
+  });
+});

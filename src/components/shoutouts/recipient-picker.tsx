@@ -20,6 +20,14 @@ export const fetchPeople: SearchPeople = async (query, signal) => {
   return body.people;
 };
 
+/** People search that also includes the signed-in user (for filters). */
+export const fetchPeopleIncludingSelf: SearchPeople = async (query, signal) => {
+  const response = await fetch(`/api/people?self=1&q=${encodeURIComponent(query)}`, { signal });
+  if (!response.ok) return [];
+  const body = (await response.json()) as { people: Person[] };
+  return body.people;
+};
+
 export function RecipientPicker({
   selected,
   onChange,
@@ -27,6 +35,10 @@ export function RecipientPicker({
   error,
   search = fetchPeople,
   debounceMs = 200,
+  name = "recipientIds",
+  label = "Who are you recognising?",
+  hint = `Up to ${max} people. Each one uses a shoutout.`,
+  labelClassName = "font-display text-xl font-semibold",
 }: {
   selected: Person[];
   onChange: (people: Person[]) => void;
@@ -34,6 +46,11 @@ export function RecipientPicker({
   error?: string;
   search?: SearchPeople;
   debounceMs?: number;
+  /** Form field name for the selected ids. */
+  name?: string;
+  label?: string;
+  hint?: string;
+  labelClassName?: string;
 }) {
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,10 +117,10 @@ export function RecipientPicker({
 
   return (
     <div>
-      <label htmlFor={`${listId}-input`} className="font-display text-xl font-semibold">
-        Who are you recognising?
+      <label htmlFor={`${listId}-input`} className={labelClassName}>
+        {label}
       </label>
-      <p className="text-sm text-muted">Up to {max} people. Each one uses a shoutout.</p>
+      {hint && <p className="text-sm text-muted">{hint}</p>}
       <div
         className={cn(
           "relative mt-3 flex flex-wrap items-center gap-2 rounded-2xl border-2 bg-surface p-2 focus-within:border-teal",
@@ -115,7 +132,7 @@ export function RecipientPicker({
             key={person.id}
             className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted py-1 pr-1 pl-1"
           >
-            <input type="hidden" name="recipientIds" value={person.id} />
+            <input type="hidden" name={name} value={person.id} />
             <Avatar name={person.name} size="sm" className="size-6 text-[10px]" />
             <span className="text-sm font-bold">{person.name}</span>
             <button
@@ -142,7 +159,9 @@ export function RecipientPicker({
           autoComplete="off"
           disabled={full}
           value={query}
-          placeholder={full ? `That's the maximum of ${max}` : "Search by name or email"}
+          placeholder={
+            full ? (max === 1 ? "" : `That's the maximum of ${max}`) : "Search by name or email"
+          }
           onChange={(event) => {
             setQuery(event.target.value);
             setOpen(true);

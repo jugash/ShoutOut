@@ -3,6 +3,7 @@
 #   deploy/local/deploy.sh            build + deploy + helm test
 #   SKIP_BUILD=1 deploy/local/deploy.sh   redeploy the last built tag
 #   RESET_KEYCLOAK_REALM=1 deploy/local/deploy.sh   re-import the realm (picks up realm changes)
+#   SKIP_SECURITY_SCAN=1 deploy/local/deploy.sh     skip the npm audit + Trivy image scan
 set -euo pipefail
 
 CLUSTER="${CLUSTER:-shoutout}"
@@ -50,6 +51,9 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
     tail -40 "$BUILD_LOG"
     echo "Image build failed (full log: $BUILD_LOG)" >&2
     exit 1
+  fi
+  if [[ -z "${SKIP_SECURITY_SCAN:-}" ]]; then
+    "$ROOT/scripts/security-scan.sh" "shoutout:$TAG" "shoutout-migrate:$TAG"
   fi
   for node in $(k3d node list --no-headers | awk -v c="$CLUSTER" '$3==c && ($2=="server" || $2=="agent") {print $1}'); do
     log "Importing images into $node"

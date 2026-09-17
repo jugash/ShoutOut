@@ -15,22 +15,39 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY . .
 RUN npm run build
 
-# ---- migrations image: prisma CLI only (build with --target migrator) ----
-FROM ${NODE_IMAGE} AS migrator
+# ---- hardened Node base: patched OS packages, no npm/yarn/corepack at runtime ----
+FROM ${NODE_IMAGE} AS base
+RUN apk upgrade --no-cache \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+      /usr/local/bin/yarn /usr/local/bin/yarnpkg /opt/yarn-*
+
+# ---- prisma CLI install for the migrations image ----
+FROM ${NODE_IMAGE} AS migrator-deps
 WORKDIR /migrate
 COPY package.json /tmp/package.json
-RUN npm init -y >/dev/null \
+# Same prisma/dotenv versions and security overrides as the app's package.json.
+RUN node -e ' \
+      const p = require("/tmp/package.json"); \
+      require("fs").writeFileSync("package.json", JSON.stringify({ \
+        name: "shoutout-migrate", private: true, \
+        dependencies: { prisma: p.devDependencies.prisma, dotenv: p.devDependencies.dotenv }, \
+        overrides: p.overrides })); \
+    ' \
  && npm install --omit=dev --no-audit --no-fund \
-      "prisma@$(node -p "require('/tmp/package.json').devDependencies.prisma")" \
-      "dotenv@$(node -p "require('/tmp/package.json').devDependencies.dotenv")" \
  && npm cache clean --force
+
+# ---- migrations image (build with --target migrator) ----
+FROM base AS migrator
+WORKDIR /migrate
+COPY --from=migrator-deps /migrate/node_modules ./node_modules
 COPY prisma.config.ts ./
 COPY prisma ./prisma
 USER 1000
 CMD ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
 
 # ---- runtime (default target) ----
-FROM ${NODE_IMAGE} AS runner
+FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

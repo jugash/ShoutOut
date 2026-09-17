@@ -14,6 +14,8 @@ test.describe("authentication", () => {
     await expect(page.getByText("Admin", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Send a shoutout" })).toBeVisible();
 
+    // Let the page finish hydrating so the click reaches the sign-out action.
+    await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/signin/);
 

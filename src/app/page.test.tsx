@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FeedItem } from "@/server/shoutouts/feed";
+import type { FeedFilterOptions } from "@/components/shoutouts/feed-filters";
 
 const auth = vi.fn();
 const redirect = vi.fn(() => {
@@ -8,18 +8,38 @@ const redirect = vi.fn(() => {
 });
 const getBudget = vi.fn();
 const listFeed = vi.fn();
+const findUnique = vi.fn();
+const FeedFilters = vi.fn(
+  (_props: { options: FeedFilterOptions; active: boolean; person: unknown }) => <div>filters</div>,
+);
+const FeedList = vi.fn(
+  (props: { items: { message: string }[]; nextHref: string | null; emptyText: string }) => (
+    <div>
+      {props.items.map((i) => (
+        <article key={i.message}>{i.message}</article>
+      ))}
+      <p>{props.emptyText}</p>
+      {props.nextHref && <a href={props.nextHref}>next</a>}
+    </div>
+  ),
+);
 
 vi.mock("@/auth", () => ({ auth }));
 vi.mock("next/navigation", () => ({ redirect }));
-vi.mock("@/lib/db", () => ({ getDb: () => ({}) }));
+vi.mock("@/lib/db", () => ({ getDb: () => ({ user: { findUnique } }) }));
 vi.mock("@/server/shoutouts/budget", () => ({ getBudget }));
 vi.mock("@/server/shoutouts/feed", () => ({ listFeed }));
+vi.mock("@/server/shoutouts/catalog", () => ({
+  listActiveCards: async () => [
+    { id: "c1", slug: "s", title: "Thank You", tagline: "t", illustration: "heart", tone: "coral" },
+  ],
+  listActiveValues: async () => [{ id: "v1", name: "Integrity" }],
+}));
 vi.mock("@/components/layout/app-header", () => ({
   AppHeader: ({ user }: { user: { name?: string } }) => <header>header for {user.name}</header>,
 }));
-vi.mock("@/components/shoutouts/feed-item", () => ({
-  FeedItemCard: ({ item }: { item: FeedItem }) => <article>{item.message}</article>,
-}));
+vi.mock("@/components/shoutouts/feed-filters", () => ({ FeedFilters }));
+vi.mock("@/components/shoutouts/feed-list", () => ({ FeedList }));
 
 const { default: HomePage } = await import("./page");
 
@@ -50,7 +70,7 @@ describe("HomePage", () => {
     expect(redirect).toHaveBeenCalledWith("/signin");
   });
 
-  it("greets the user, shows the budget and an empty feed", async () => {
+  it("greets the user, shows the budget, filters and an empty feed", async () => {
     render(await HomePage(props()));
     expect(screen.getByRole("heading", { name: /hi bob/i })).toBeInTheDocument();
     expect(screen.getByText("header for Bob Baker")).toBeInTheDocument();
@@ -59,40 +79,72 @@ describe("HomePage", () => {
       "/shoutouts/new",
     );
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "17");
+    expect(screen.getByRole("heading", { name: "Latest shoutouts" })).toBeInTheDocument();
     expect(screen.getByText(/be the first to say thanks/i)).toBeInTheDocument();
-    expect(listFeed).toHaveBeenCalledWith({}, "u1", expect.objectContaining({ cursor: undefined }));
+    expect(FeedFilters.mock.calls[0][0]).toMatchObject({
+      options: {
+        cards: [{ id: "c1", title: "Thank You" }],
+        values: [{ id: "v1", name: "Integrity" }],
+      },
+      active: false,
+      person: null,
+    });
+    expect(findUnique).not.toHaveBeenCalled();
+    expect(FeedList.mock.calls[0][0]).toMatchObject({ viewerName: "Bob Baker", nextHref: null });
   });
 
-  it("lists shoutouts with a link to older ones and shows notices", async () => {
+  it("lists shoutouts, keeps filters in the next-page link and shows notices", async () => {
     listFeed.mockResolvedValue({
-      items: [
-        { id: "s1", message: "Great work" },
-        { id: "s2", message: "Thanks!" },
-      ],
-      nextCursor: "s2",
+      items: [{ id: "s1", message: "Great work" }],
+      nextCursor: "s1",
     });
-    render(await HomePage(props({ notice: "sent" })));
-    expect(screen.getByRole("status")).toHaveTextContent("Shoutout sent!");
-    expect(screen.getAllByRole("article")).toHaveLength(2);
-    expect(screen.getByRole("link", { name: "Show older shoutouts" })).toHaveAttribute(
-      "href",
-      "/?cursor=s2",
+    findUnique.mockResolvedValue({ id: "u2", name: "Carol", email: "c@x" });
+    render(
+      await HomePage(props({ notice: "sent", person: "u2", value: "v1", from: "2026-09-01" })),
     );
+    expect(screen.getByRole("status")).toHaveTextContent("Shoutout sent!");
+    expect(screen.getByRole("heading", { name: "Matching shoutouts" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "next" })).toHaveAttribute(
+      "href",
+      "/?person=u2&value=v1&from=2026-09-01&cursor=s1",
+    );
+    expect(listFeed).toHaveBeenCalledWith(
+      expect.anything(),
+      "u1",
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          personId: "u2",
+          valueId: "v1",
+          from: new Date("2026-09-01T00:00:00Z"),
+        }),
+      }),
+    );
+    expect(FeedFilters.mock.calls[0][0]).toMatchObject({ active: true, person: { name: "Carol" } });
+    expect(screen.getByText("No shoutouts match those filters.")).toBeInTheDocument();
   });
 
   it("pages with a cursor and handles the end of the feed", async () => {
     render(await HomePage(props({ cursor: "s2", notice: ["a", "b"] })));
-    expect(listFeed).toHaveBeenCalledWith({}, "u1", expect.objectContaining({ cursor: "s2" }));
+    expect(listFeed).toHaveBeenCalledWith(
+      expect.anything(),
+      "u1",
+      expect.objectContaining({ cursor: "s2" }),
+    );
     expect(screen.getByText("No more shoutouts.")).toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
-  it("explains when the budget is used up and handles a missing name", async () => {
+  it("explains when the budget is used up and handles missing names", async () => {
     auth.mockResolvedValue({ user: { ...bob, name: undefined } });
     getBudget.mockResolvedValue(budget(0));
     render(await HomePage(props()));
     expect(screen.getByRole("heading", { name: /hi there/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Send a shoutout" })).not.toBeInTheDocument();
     expect(screen.getByText(/used all your shoutouts/i)).toBeInTheDocument();
+    expect(FeedList.mock.calls[0][0]).toMatchObject({ viewerName: "bob@example.com" });
+
+    auth.mockResolvedValue({ user: { id: "u1", roles: [] } });
+    render(await HomePage(props()));
+    expect(FeedList.mock.calls[1][0]).toMatchObject({ viewerName: "You" });
   });
 });
