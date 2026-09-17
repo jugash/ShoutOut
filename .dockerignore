@@ -13,3 +13,4 @@ docs
 Dockerfile
 .dockerignore
 src/generated
+db/*.test.ts

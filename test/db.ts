@@ -1,42 +1,36 @@
 import { afterAll, beforeEach, inject } from "vitest";
 import { DEFAULT_CARD_DESIGNS } from "@/components/cards/designs";
 import { createDb, type Db } from "@/lib/db";
+import { sql } from "@/lib/sql";
 
 const SEEDED_VALUES = ["Integrity", "Diversity", "Excellence", "Collaboration", "Engagement"];
 
-/** Real Postgres client for integration tests, with tables emptied before each test. */
+/** Real Postgres for integration tests, emptied before each test. */
 export function useTestDb(): Db {
   const db = createDb(inject("databaseUrl"));
 
   beforeEach(async () => {
-    const tables = await db.$queryRaw<{ tablename: string }[]>`
-      SELECT tablename FROM pg_tables
-      WHERE schemaname = 'public'
-        AND tablename NOT IN ('_prisma_migrations', 'cards', 'company_values')`;
-    if (tables.length > 0) {
-      const list = tables.map((t) => `"public"."${t.tablename}"`).join(", ");
-      await db.$executeRawUnsafe(`TRUNCATE ${list} RESTART IDENTITY CASCADE`);
-    }
-    // Restore the seeded catalogue exactly as the migration left it.
-    await db.card.deleteMany({ where: { NOT: { id: { startsWith: "card_" } } } });
-    await db.companyValue.deleteMany({ where: { NOT: { id: { startsWith: "value_" } } } });
+    await db.execute(sql`
+      TRUNCATE users, shoutouts, shoutout_recipients, reactions, comments, reports, audit_logs
+      RESTART IDENTITY CASCADE`);
+    // Restore the seeded catalogue exactly as the migrations left it.
+    await db.execute(sql`DELETE FROM cards WHERE id NOT LIKE 'card\_%'`);
+    await db.execute(sql`DELETE FROM company_values WHERE id NOT LIKE 'value\_%'`);
     for (const [index, card] of DEFAULT_CARD_DESIGNS.entries()) {
-      const { slug, ...design } = card;
-      await db.card.update({
-        where: { id: `card_${slug}` },
-        data: { ...design, slug, active: true, sortOrder: index + 1 },
-      });
+      await db.execute(sql`
+        UPDATE cards SET slug = ${card.slug}, title = ${card.title}, tagline = ${card.tagline},
+          illustration = ${card.illustration}, tone = ${card.tone}, active = true, sort_order = ${index + 1}
+        WHERE id = ${`card_${card.slug}`}`);
     }
     for (const [index, name] of SEEDED_VALUES.entries()) {
-      await db.companyValue.update({
-        where: { id: `value_${name.toLowerCase()}` },
-        data: { name, active: true, sortOrder: index + 1 },
-      });
+      await db.execute(sql`
+        UPDATE company_values SET name = ${name}, active = true, sort_order = ${index + 1}
+        WHERE id = ${`value_${name.toLowerCase()}`}`);
     }
   });
 
   afterAll(async () => {
-    await db.$disconnect();
+    await db.close();
   });
 
   return db;

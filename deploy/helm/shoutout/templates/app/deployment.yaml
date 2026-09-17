@@ -34,18 +34,10 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: migrate
-          image: {{ include "shoutout.migrations.image" . }}
-          imagePullPolicy: {{ .Values.app.migrations.image.pullPolicy }}
-          # Retries while the database is still starting.
-          command:
-            - sh
-            - -c
-            - |
-              for i in $(seq 1 30); do
-                node node_modules/prisma/build/index.js migrate deploy && exit 0
-                echo "migrate failed (attempt $i), retrying in 5s"; sleep 5
-              done
-              exit 1
+          image: {{ include "shoutout.app.image" . }}
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          # Applies db/migrations/*.sql; retries while the database is still starting.
+          command: ["node", "db/migrate.mjs"]
           env:
             {{- include "shoutout.databaseUrlEnv" . | nindent 12 }}
           securityContext:

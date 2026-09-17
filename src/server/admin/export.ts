@@ -1,48 +1,62 @@
-import { Prisma } from "@/generated/prisma/client";
 import type { Db } from "@/lib/db";
+import { sql } from "@/lib/sql";
 import { rangeSql, topRecipients, topSenders, topValues } from "../insights/leaderboard";
 import type { DateRange, LeaderboardPeriod } from "../insights/periods";
 import { PERIOD_LABELS, periodRange } from "../insights/periods";
 import { toCsv } from "./csv";
 
+interface ShoutoutExportRow {
+  id: string;
+  createdAt: Date;
+  senderName: string;
+  senderEmail: string;
+  recipientNames: string;
+  recipientEmails: string;
+  recipientCount: number;
+  card: string;
+  value: string;
+  visibility: string;
+  message: string;
+  reactions: number;
+  comments: number;
+  edited: boolean;
+}
+
 /** Visible (not deleted or moderated) shoutouts. Private messages are not exported. */
 export async function exportShoutoutsCsv(db: Db, range: DateRange): Promise<string> {
-  const rows = await db.shoutout.findMany({
-    where: {
-      deletedAt: null,
-      moderationStatus: "VISIBLE",
-      createdAt: {
-        ...(range.start ? { gte: range.start } : {}),
-        ...(range.end ? { lt: range.end } : {}),
-      },
-    },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-    include: {
-      sender: { select: { name: true, email: true } },
-      recipients: {
-        select: { user: { select: { name: true, email: true } } },
-        orderBy: { user: { name: "asc" } },
-      },
-      card: { select: { title: true } },
-      value: { select: { name: true } },
-      _count: { select: { reactions: true, comments: { where: { deletedAt: null } } } },
-    },
-  });
+  const rows = await db.rows<ShoutoutExportRow>(sql`
+    SELECT s.id, s.created_at AS "createdAt", u.name AS "senderName", u.email AS "senderEmail",
+      COALESCE((SELECT string_agg(ru.name, '; ' ORDER BY ru.name, ru.id) FROM shoutout_recipients rr
+        JOIN users ru ON ru.id = rr.user_id WHERE rr.shoutout_id = s.id), '') AS "recipientNames",
+      COALESCE((SELECT string_agg(ru.email, '; ' ORDER BY ru.name, ru.id) FROM shoutout_recipients rr
+        JOIN users ru ON ru.id = rr.user_id WHERE rr.shoutout_id = s.id), '') AS "recipientEmails",
+      (SELECT COUNT(*)::int FROM shoutout_recipients rr WHERE rr.shoutout_id = s.id) AS "recipientCount",
+      c.title AS card, v.name AS value, lower(s.visibility::text) AS visibility,
+      CASE WHEN s.visibility = 'PUBLIC' THEN s.message ELSE '[private]' END AS message,
+      (SELECT COUNT(*)::int FROM reactions re WHERE re.shoutout_id = s.id) AS reactions,
+      (SELECT COUNT(*)::int FROM comments cm WHERE cm.shoutout_id = s.id AND cm.deleted_at IS NULL) AS comments,
+      s.edited_at IS NOT NULL AS edited
+    FROM shoutouts s
+    JOIN users u ON u.id = s.sender_id
+    JOIN cards c ON c.id = s.card_id
+    JOIN company_values v ON v.id = s.value_id
+    WHERE ${rangeSql(range)}
+    ORDER BY s.created_at ASC, s.id ASC`);
   return toCsv(rows, [
     { header: "id", value: (r) => r.id },
     { header: "created_at", value: (r) => r.createdAt },
-    { header: "sender_name", value: (r) => r.sender.name },
-    { header: "sender_email", value: (r) => r.sender.email },
-    { header: "recipient_names", value: (r) => r.recipients.map((x) => x.user.name).join("; ") },
-    { header: "recipient_emails", value: (r) => r.recipients.map((x) => x.user.email).join("; ") },
-    { header: "recipient_count", value: (r) => r.recipients.length },
-    { header: "card", value: (r) => r.card.title },
-    { header: "value", value: (r) => r.value.name },
-    { header: "visibility", value: (r) => r.visibility.toLowerCase() },
-    { header: "message", value: (r) => (r.visibility === "PUBLIC" ? r.message : "[private]") },
-    { header: "reactions", value: (r) => r._count.reactions },
-    { header: "comments", value: (r) => r._count.comments },
-    { header: "edited", value: (r) => r.editedAt !== null },
+    { header: "sender_name", value: (r) => r.senderName },
+    { header: "sender_email", value: (r) => r.senderEmail },
+    { header: "recipient_names", value: (r) => r.recipientNames },
+    { header: "recipient_emails", value: (r) => r.recipientEmails },
+    { header: "recipient_count", value: (r) => r.recipientCount },
+    { header: "card", value: (r) => r.card },
+    { header: "value", value: (r) => r.value },
+    { header: "visibility", value: (r) => r.visibility },
+    { header: "message", value: (r) => r.message },
+    { header: "reactions", value: (r) => r.reactions },
+    { header: "comments", value: (r) => r.comments },
+    { header: "edited", value: (r) => r.edited },
   ]);
 }
 
@@ -60,7 +74,7 @@ interface PersonRow {
 /** One row per person: activity within the range. */
 export async function exportPeopleCsv(db: Db, range: DateRange): Promise<string> {
   const where = rangeSql(range);
-  const rows = await db.$queryRaw<PersonRow[]>(Prisma.sql`
+  const rows = await db.rows<PersonRow>(sql`
     SELECT u.name, u.email, u.active,
       (SELECT COUNT(*)::int FROM shoutout_recipients r JOIN shoutouts s ON s.id = r.shoutout_id
         WHERE r.user_id = u.id AND ${where}) AS received,

@@ -77,11 +77,6 @@ Call with (dict "ctx" $ "key" "auth-secret" "value" .Values.secrets.authSecret)
 {{- printf "%s:%s" .Values.app.image.repository $tag }}
 {{- end }}
 
-{{- define "shoutout.migrations.image" -}}
-{{- $tag := default (default .Chart.AppVersion .Values.app.image.tag) .Values.app.migrations.image.tag -}}
-{{- printf "%s:%s" .Values.app.migrations.image.repository $tag }}
-{{- end }}
-
 {{/* Env var that provides DATABASE_URL to the app and migrations. */}}
 {{- define "shoutout.databaseUrlEnv" -}}
 {{- if .Values.postgres.enabled }}

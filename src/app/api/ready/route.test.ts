@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const queryRaw = vi.fn();
-vi.mock("@/lib/db", () => ({ getDb: () => ({ $queryRaw: queryRaw }) }));
+vi.mock("@/lib/db", () => ({ getDb: () => ({ rows: queryRaw }) }));
 
 const { GET } = await import("./route");
 

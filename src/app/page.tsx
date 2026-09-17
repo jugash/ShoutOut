@@ -13,6 +13,7 @@ import { getBudget } from "@/server/shoutouts/budget";
 import { listActiveCards, listActiveValues } from "@/server/shoutouts/catalog";
 import { listFeed } from "@/server/shoutouts/feed";
 import { parseFeedFilters, withParams } from "@/server/shoutouts/filters";
+import { findPerson } from "@/server/users/search";
 
 function param(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -34,12 +35,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
     listFeed(db, user.id, { cursor, now, filters }),
     listActiveCards(db),
     listActiveValues(db),
-    filters.personId
-      ? db.user.findUnique({
-          where: { id: filters.personId },
-          select: { id: true, name: true, email: true },
-        })
-      : null,
+    filters.personId ? findPerson(db, filters.personId) : null,
   ]);
   const firstName = user.name?.split(" ")[0] ?? "there";
   const viewerName = user.name ?? user.email ?? "You";

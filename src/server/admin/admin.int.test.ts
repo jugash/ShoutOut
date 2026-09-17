@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { useTestDb } from "../../../test/db";
-import { CARD_ID, createUser, VALUE_ID } from "../../../test/factories";
+import {
+  CARD_ID,
+  createUser,
+  VALUE_ID,
+  findShoutoutState,
+  setCatalogActive,
+} from "../../../test/factories";
 import { getSummary } from "../insights/analytics";
 import { topRecipients } from "../insights/leaderboard";
 import { listComments } from "../social/comments";
@@ -12,6 +18,7 @@ import { listAudit } from "./audit";
 import {
   createCard,
   createValue,
+  getCard,
   listAllCards,
   listAllValues,
   moveCard,
@@ -61,6 +68,12 @@ describe("admin (postgres)", () => {
     );
 
   describe("moderation", () => {
+    it("has an empty queue when nothing is reported", async () => {
+      expect(await listPendingCases(db)).toEqual([]);
+      expect(await listResolvedCases(db)).toEqual([]);
+      expect(await countPendingCases(db)).toBe(0);
+    });
+
     it("validates reports", () => {
       expect(reportSchema.parse({ reason: "SPAM", note: "  " })).toEqual({
         reason: "SPAM",
@@ -150,9 +163,7 @@ describe("admin (postgres)", () => {
       expect(pending.shoutout.message).toBe("Secret thanks");
 
       await resolveCase(db, admin.id, privateOne.id, "REMOVED");
-      expect(
-        (await db.shoutout.findUnique({ where: { id: privateOne.id } }))?.moderationStatus,
-      ).toBe("REMOVED");
+      expect((await findShoutoutState(db, privateOne.id))?.moderationStatus).toBe("REMOVED");
       expect(await getVisibleShoutout(db, bob.id, privateOne.id)).toBeNull();
       await expect(deleteShoutout(db, alice.id, privateOne.id)).rejects.toMatchObject({
         code: "NOT_FOUND",
@@ -207,6 +218,8 @@ describe("admin (postgres)", () => {
         tone: "sky",
       });
       expect(card).toMatchObject({ slug: "high-five", sortOrder: 11, active: true });
+      expect(await getCard(db, card.id)).toEqual(card);
+      expect(await getCard(db, "missing")).toBeNull();
       const again = await createCard(db, admin.id, {
         title: "HIGH FIVE!",
         tagline: "x",
@@ -275,7 +288,7 @@ describe("admin (postgres)", () => {
     it("keeps at least one card and counts uses", async () => {
       const { admin, alice, bob } = await people();
       await send(alice.id, bob.id);
-      await db.card.updateMany({ where: { id: { not: CARD_ID } }, data: { active: false } });
+      await setCatalogActive(db, "cards", false, { except: CARD_ID });
       await expect(setCardActive(db, admin.id, CARD_ID, false)).rejects.toMatchObject({
         code: "LAST_ACTIVE",
       });
@@ -318,10 +331,7 @@ describe("admin (postgres)", () => {
       await expect(setValueActive(db, admin.id, "missing", true)).rejects.toMatchObject({
         code: "NOT_FOUND",
       });
-      await db.companyValue.updateMany({
-        where: { id: { not: VALUE_ID } },
-        data: { active: false },
-      });
+      await setCatalogActive(db, "company_values", false, { except: VALUE_ID });
       await expect(setValueActive(db, admin.id, VALUE_ID, false)).rejects.toMatchObject({
         code: "LAST_ACTIVE",
       });

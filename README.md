@@ -10,7 +10,7 @@ See [docs/PRODUCT.md](docs/PRODUCT.md) for scope and milestones and
 
 - **Next.js 16** (App Router, TypeScript, Tailwind CSS 4) — UI and server in one app
 - **Auth.js v5** with **Keycloak** (OIDC); roles `shoutout-user` / `shoutout-admin`
-- **PostgreSQL 17** via **Prisma 7**
+- **PostgreSQL 17** with plain SQL via [`pg`](https://node-postgres.com) (no ORM); migrations are `.sql` files in `db/migrations`
 - **Vitest** (unit, component, integration with Testcontainers) and **Playwright** (E2E)
 - **Docker** images and a **Helm** chart (app + PostgreSQL + Keycloak)
 
@@ -33,11 +33,24 @@ npm run test:e2e        # Playwright against http://shoutout.localtest.me
 Integration tests start PostgreSQL in a container via Testcontainers, so Docker
 or Podman must be running.
 
+### Database migrations
+
+Schema changes are plain SQL files in `db/migrations`, applied in filename order by
+`db/migrate.mjs` (each in a transaction, tracked in `schema_migrations`). In Kubernetes
+the app pod's init container runs them; locally:
+
+```bash
+npm run db:migrate   # uses DATABASE_URL from the environment or .env
+```
+
+To change the schema, add a new file such as `db/migrations/20261001120000_add_x.sql`.
+Never edit a migration that has already been applied.
+
 ### Security checks
 
 ```bash
 npm run audit:deps                                   # npm audit, fails on high/critical
-scripts/security-scan.sh shoutout:tag shoutout-migrate:tag   # + Trivy image scan
+scripts/security-scan.sh shoutout:tag   # + Trivy image scan
 ```
 
 `deploy/local/deploy.sh` runs both before deploying (skip with `SKIP_SECURITY_SCAN=1`).
@@ -52,8 +65,8 @@ findings go in `.trivyignore` with a reason and review date.
 deploy/local/deploy.sh
 ```
 
-This creates the `shoutout` k3d cluster if needed, builds the app and migration
-images, loads them into the cluster, installs the Helm chart and runs `helm test`.
+This creates the `shoutout` k3d cluster if needed, builds the app image,
+loads it into the cluster, installs the Helm chart and runs `helm test`.
 Keycloak only imports the realm on first start; after changing realm settings run
 `RESET_KEYCLOAK_REALM=1 deploy/local/deploy.sh` to re-import it (local only).
 

@@ -1,3 +1,4 @@
+import { sql } from "@/lib/sql";
 import { describe, expect, it } from "vitest";
 import { useTestDb } from "../../../test/db";
 import {
@@ -6,6 +7,9 @@ import {
   OTHER_CARD_ID,
   OTHER_VALUE_ID,
   VALUE_ID,
+  count,
+  findShoutoutState,
+  setCatalogActive,
 } from "../../../test/factories";
 import { getBudget } from "./budget";
 import { listActiveCards, listActiveValues } from "./catalog";
@@ -55,7 +59,7 @@ describe("shoutouts (postgres)", () => {
       const cards = await listActiveCards(db);
       expect(cards).toHaveLength(10);
       expect(cards[0]).toMatchObject({ slug: "thank-you", illustration: "heart", tone: "coral" });
-      await db.companyValue.update({ where: { id: "value_diversity" }, data: { active: false } });
+      await setCatalogActive(db, "company_values", false, { only: "value_diversity" });
       expect((await listActiveValues(db)).map((v) => v.name)).toEqual([
         "Integrity",
         "Excellence",
@@ -74,7 +78,7 @@ describe("shoutouts (postgres)", () => {
         message: "Thanks!",
         visibility: "PUBLIC",
       });
-      expect(await db.shoutoutRecipient.count({ where: { shoutoutId: shoutout.id } })).toBe(2);
+      expect(await count(db, "shoutout_recipients", sql`shoutout_id = ${shoutout.id}`)).toBe(2);
       expect(await getBudget(db, alice.id, 3, now)).toEqual({
         allowance: 3,
         used: 2,
@@ -103,7 +107,7 @@ describe("shoutouts (postgres)", () => {
       await expect(send(alice.id, [bob.id], { cardId: "nope" })).rejects.toMatchObject({
         code: "CARD_NOT_FOUND",
       });
-      await db.companyValue.update({ where: { id: VALUE_ID }, data: { active: false } });
+      await setCatalogActive(db, "company_values", false, { only: VALUE_ID });
       await expect(send(alice.id, [bob.id])).rejects.toMatchObject({ code: "VALUE_NOT_FOUND" });
     });
 
@@ -176,8 +180,8 @@ describe("shoutouts (postgres)", () => {
     it("keeps a retired card or value but won't switch to one", async () => {
       const { alice, bob } = await people();
       const shoutout = await send(alice.id, [bob.id]);
-      await db.card.update({ where: { id: CARD_ID }, data: { active: false } });
-      await db.companyValue.update({ where: { id: VALUE_ID }, data: { active: false } });
+      await setCatalogActive(db, "cards", false, { only: CARD_ID });
+      await setCatalogActive(db, "company_values", false, { only: VALUE_ID });
       const edit = {
         cardId: CARD_ID,
         valueId: VALUE_ID,
@@ -188,11 +192,11 @@ describe("shoutouts (postgres)", () => {
         message: "Still thanks",
       });
 
-      await db.card.update({ where: { id: OTHER_CARD_ID }, data: { active: false } });
+      await setCatalogActive(db, "cards", false, { only: OTHER_CARD_ID });
       await expect(
         updateShoutout(db, alice.id, shoutout.id, { ...edit, cardId: OTHER_CARD_ID }, now),
       ).rejects.toMatchObject({ code: "CARD_NOT_FOUND" });
-      await db.companyValue.update({ where: { id: OTHER_VALUE_ID }, data: { active: false } });
+      await setCatalogActive(db, "company_values", false, { only: OTHER_VALUE_ID });
       await expect(
         updateShoutout(db, alice.id, shoutout.id, { ...edit, valueId: OTHER_VALUE_ID }, now),
       ).rejects.toMatchObject({ code: "VALUE_NOT_FOUND" });
@@ -222,9 +226,7 @@ describe("shoutouts (postgres)", () => {
       const { alice, bob, carol } = await people();
       const shoutout = await send(alice.id, [bob.id, carol.id]);
       await deleteShoutout(db, alice.id, shoutout.id, later(1000));
-      expect((await db.shoutout.findUnique({ where: { id: shoutout.id } }))?.deletedAt).toEqual(
-        later(1000),
-      );
+      expect((await findShoutoutState(db, shoutout.id))?.deletedAt).toEqual(later(1000));
       expect((await getBudget(db, alice.id, 3, now)).used).toBe(0);
       await expect(deleteShoutout(db, alice.id, shoutout.id, later(2000))).rejects.toMatchObject({
         code: "NOT_FOUND",

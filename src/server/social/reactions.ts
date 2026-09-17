@@ -1,5 +1,6 @@
 import type { Db } from "@/lib/db";
 import { isReactionKey } from "@/lib/reactions";
+import { sql } from "@/lib/sql";
 import { DomainError } from "../errors";
 import { visibleTo } from "../shoutouts/feed";
 
@@ -13,16 +14,18 @@ export async function toggleReaction(
   if (!isReactionKey(emoji)) {
     throw new DomainError("NOT_FOUND", "That reaction isn't available");
   }
-  const shoutout = await db.shoutout.findFirst({
-    where: { id: shoutoutId, ...visibleTo(userId) },
-    select: { id: true },
-  });
+  const shoutout = await db.one(
+    sql`SELECT s.id FROM shoutouts s WHERE s.id = ${shoutoutId} AND ${visibleTo(userId)}`,
+  );
   if (!shoutout) throw new DomainError("NOT_FOUND", "That shoutout doesn't exist");
 
-  const key = { shoutoutId_userId_emoji: { shoutoutId, userId, emoji } };
-  const { count } = await db.reaction.deleteMany({ where: { shoutoutId, userId, emoji } });
-  if (count > 0) return { reacted: false };
-  // Upsert so a double click can't fail on the unique key.
-  await db.reaction.upsert({ where: key, create: { shoutoutId, userId, emoji }, update: {} });
+  const removed = await db.execute(sql`
+    DELETE FROM reactions
+    WHERE shoutout_id = ${shoutoutId} AND user_id = ${userId} AND emoji = ${emoji}`);
+  if (removed > 0) return { reacted: false };
+  // ON CONFLICT so a double click can't fail on the primary key.
+  await db.execute(sql`
+    INSERT INTO reactions (shoutout_id, user_id, emoji) VALUES (${shoutoutId}, ${userId}, ${emoji})
+    ON CONFLICT DO NOTHING`);
   return { reacted: true };
 }

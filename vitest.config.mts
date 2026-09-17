@@ -34,7 +34,7 @@ export default defineConfig({
         test: {
           name: "integration",
           environment: "node",
-          include: ["src/**/*.int.test.ts"],
+          include: ["src/**/*.int.test.ts", "db/**/*.int.test.ts"],
           globalSetup: ["./test/global-setup-db.ts"],
           // Tests share one database, so run files one at a time.
           fileParallelism: false,

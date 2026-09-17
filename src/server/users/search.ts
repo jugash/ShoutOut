@@ -1,9 +1,15 @@
 import type { Db } from "@/lib/db";
+import { empty, sql } from "@/lib/sql";
 
 export interface PersonSummary {
   id: string;
   name: string;
   email: string;
+}
+
+/** Escapes LIKE wildcards so user input matches literally. */
+export function escapeLike(text: string): string {
+  return text.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
 /**
@@ -18,22 +24,16 @@ export function searchPeople(
   limit = 8,
   { includeSelf = false }: { includeSelf?: boolean } = {},
 ): Promise<PersonSummary[]> {
-  const q = query.trim();
-  return db.user.findMany({
-    where: {
-      active: true,
-      ...(includeSelf ? {} : { id: { not: viewerId } }),
-      ...(q
-        ? {
-            OR: [
-              { name: { contains: q, mode: "insensitive" } },
-              { email: { startsWith: q, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: { name: "asc" },
-    take: limit,
-    select: { id: true, name: true, email: true },
-  });
+  const q = escapeLike(query.trim());
+  return db.rows<PersonSummary>(sql`
+    SELECT id, name, email FROM users
+    WHERE active
+      ${includeSelf ? empty : sql`AND id <> ${viewerId}`}
+      ${q ? sql`AND (name ILIKE ${`%${q}%`} OR email ILIKE ${`${q}%`})` : empty}
+    ORDER BY name ASC
+    LIMIT ${limit}`);
+}
+
+export function findPerson(db: Db, id: string): Promise<PersonSummary | null> {
+  return db.one<PersonSummary>(sql`SELECT id, name, email FROM users WHERE id = ${id}`);
 }

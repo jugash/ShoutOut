@@ -1,5 +1,5 @@
-import { Prisma } from "@/generated/prisma/client";
 import type { Db } from "@/lib/db";
+import { sql } from "@/lib/sql";
 import { rangeSql } from "./leaderboard";
 import type { DateRange } from "./periods";
 
@@ -14,7 +14,7 @@ export interface Summary {
 }
 
 export async function getSummary(db: Db, range: Required<DateRange>): Promise<Summary> {
-  const [row] = await db.$queryRaw<Summary[]>`
+  const row = await db.one<Summary>(sql`
     SELECT
       (SELECT COUNT(*)::int FROM shoutouts s WHERE ${rangeSql(range)}) AS shoutouts,
       (SELECT COUNT(*)::int FROM shoutout_recipients r JOIN shoutouts s ON s.id = r.shoutout_id
@@ -24,8 +24,8 @@ export async function getSummary(db: Db, range: Required<DateRange>): Promise<Su
         WHERE u.active AND ${rangeSql(range)}) AS givers,
       (SELECT COUNT(DISTINCT r.user_id)::int FROM shoutout_recipients r
         JOIN shoutouts s ON s.id = r.shoutout_id JOIN users u ON u.id = r.user_id
-        WHERE u.active AND ${rangeSql(range)}) AS receivers`;
-  return row;
+        WHERE u.active AND ${rangeSql(range)}) AS receivers`);
+  return row!;
 }
 
 export { percent } from "./format";
@@ -65,14 +65,13 @@ export async function getTrend(
   range: Required<DateRange>,
   bucket: Bucket,
 ): Promise<TrendPoint[]> {
-  const unit = bucket === "month" ? Prisma.sql`'month'` : Prisma.sql`'week'`;
-  const rows = await db.$queryRaw<{ start: Date; count: number }[]>`
-    SELECT date_trunc(${unit}, s.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS start,
+  const rows = await db.rows<{ start: Date; count: number }>(sql`
+    SELECT date_trunc(${bucket}, s.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS start,
            COUNT(*)::int AS count
     FROM shoutouts s
     WHERE ${rangeSql(range)}
     GROUP BY 1
-    ORDER BY 1`;
+    ORDER BY 1`);
   const counts = new Map(rows.map((row) => [row.start.getTime(), row.count]));
   const points: TrendPoint[] = [];
   for (
@@ -92,23 +91,23 @@ export interface Breakdown {
 }
 
 export function getValueBreakdown(db: Db, range: DateRange): Promise<Breakdown[]> {
-  return db.$queryRaw<Breakdown[]>`
+  return db.rows<Breakdown>(sql`
     SELECT v.id, v.name, COUNT(s.id)::int AS count
     FROM company_values v
     LEFT JOIN shoutouts s ON s.value_id = v.id AND ${rangeSql(range)}
     WHERE v.active OR s.id IS NOT NULL
     GROUP BY v.id, v.name, v.sort_order
-    ORDER BY count DESC, v.sort_order ASC`;
+    ORDER BY count DESC, v.sort_order ASC`);
 }
 
 export function getCardBreakdown(db: Db, range: DateRange): Promise<Breakdown[]> {
-  return db.$queryRaw<Breakdown[]>`
+  return db.rows<Breakdown>(sql`
     SELECT c.id, c.title AS name, COUNT(s.id)::int AS count
     FROM cards c
     LEFT JOIN shoutouts s ON s.card_id = c.id AND ${rangeSql(range)}
     WHERE c.active OR s.id IS NOT NULL
     GROUP BY c.id, c.title, c.sort_order
-    ORDER BY count DESC, c.sort_order ASC`;
+    ORDER BY count DESC, c.sort_order ASC`);
 }
 
 export interface UnrecognisedPerson {
@@ -120,7 +119,7 @@ export interface UnrecognisedPerson {
 
 /** Active people with no shoutout received since `since`, longest-waiting first. */
 export function getUnrecognised(db: Db, since: Date, limit = 50): Promise<UnrecognisedPerson[]> {
-  return db.$queryRaw<UnrecognisedPerson[]>`
+  return db.rows<UnrecognisedPerson>(sql`
     SELECT u.id, u.name, u.email, MAX(s.created_at) AS "lastRecognisedAt"
     FROM users u
     LEFT JOIN shoutout_recipients r ON r.user_id = u.id
@@ -130,5 +129,5 @@ export function getUnrecognised(db: Db, since: Date, limit = 50): Promise<Unreco
     GROUP BY u.id, u.name, u.email
     HAVING MAX(s.created_at) IS NULL OR MAX(s.created_at) < ${since}
     ORDER BY MAX(s.created_at) ASC NULLS FIRST, u.name ASC
-    LIMIT ${limit}`;
+    LIMIT ${limit}`);
 }

@@ -6,6 +6,7 @@ import {
   OTHER_CARD_ID,
   OTHER_VALUE_ID,
   VALUE_ID,
+  count,
 } from "../../../test/factories";
 import { getVisibleShoutout, listFeed, type FeedFilters } from "../shoutouts/feed";
 import { sendShoutout } from "../shoutouts/send";
@@ -65,7 +66,7 @@ describe("reactions and comments (postgres)", () => {
       ]);
 
       expect(await toggleReaction(db, bob.id, publicOne.id, "fire")).toEqual({ reacted: false });
-      expect(await db.reaction.count()).toBe(2);
+      expect(await count(db, "reactions")).toBe(2);
     });
 
     it("only allows known emoji on shoutouts the user can see", async () => {
@@ -163,6 +164,9 @@ describe("reactions and comments (postgres)", () => {
       expect(await messages({ valueId: OTHER_VALUE_ID })).toEqual(["Unicorn work"]);
       expect(await messages({ cardId: OTHER_CARD_ID })).toHaveLength(1);
       expect(await messages({ query: "UNICORN" })).toEqual(["Unicorn work"]);
+      // Wildcards in the search box match literally.
+      expect(await messages({ query: "%" })).toEqual([]);
+      expect(await messages({ query: "_" })).toEqual([]);
       expect(await messages({ query: "  " })).toHaveLength(5);
       expect(await messages({ from: at(11), to: new Date(Date.UTC(2026, 8, 12)) })).toHaveLength(1);
       expect(await messages({ personId: dave.id, valueId: OTHER_VALUE_ID })).toEqual([

@@ -1,5 +1,3 @@
-import type { DbClient } from "@/lib/db";
-
 export type Direction = "up" | "down";
 
 /**
@@ -17,8 +15,8 @@ export async function moveInOrder(
   if (index < 0 || target < 0 || target >= items.length) return false;
   const reordered = [...items];
   [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
-  await Promise.all(reordered.map((item, i) => save(item.id, i + 1)));
+  for (const [i, item] of reordered.entries()) {
+    await save(item.id, i + 1);
+  }
   return true;
 }
-
-export type { DbClient };

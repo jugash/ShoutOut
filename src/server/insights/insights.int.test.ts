@@ -6,6 +6,8 @@ import {
   OTHER_CARD_ID,
   OTHER_VALUE_ID,
   VALUE_ID,
+  setCatalogActive,
+  setUserActive,
 } from "../../../test/factories";
 import { deleteShoutout } from "../shoutouts/manage";
 import { sendShoutout } from "../shoutouts/send";
@@ -57,7 +59,7 @@ describe("leaderboards and analytics (postgres)", () => {
     await send(bob.id, [gone.id], at(9, 9));
     await send(dave.id, [carol.id], at(6, 1)); // earlier quarter
     await send(gone.id, [alice.id], at(9, 10));
-    await db.user.update({ where: { id: gone.id }, data: { active: false } });
+    await setUserActive(db, gone.id, false);
     const deleted = await send(erin.id, [alice.id], at(9, 11));
     await deleteShoutout(db, erin.id, deleted.id, at(9, 11));
     return { alice, bob, carol, dave, erin, gone };
@@ -131,7 +133,7 @@ describe("leaderboards and analytics (postgres)", () => {
       ["Integrity", 4],
       ["Collaboration", 1],
     ]);
-    await db.companyValue.update({ where: { id: "value_diversity" }, data: { active: false } });
+    await setCatalogActive(db, "company_values", false, { only: "value_diversity" });
     expect(await getValueBreakdown(db, september)).toHaveLength(4);
     const cards = await getCardBreakdown(db, september);
     expect(cards).toHaveLength(10);

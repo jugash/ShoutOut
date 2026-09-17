@@ -5,10 +5,6 @@ app:
   image:
     repository: docker.io/library/shoutout
     pullPolicy: Never
-  migrations:
-    image:
-      repository: docker.io/library/shoutout-migrate
-      pullPolicy: Never
 
 keycloak:
   url: http://auth.localtest.me

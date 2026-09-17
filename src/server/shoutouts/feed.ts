@@ -1,6 +1,7 @@
 import type { Db } from "@/lib/db";
-import type { Prisma, Visibility } from "@/generated/prisma/client";
 import { summarizeReactions, type ReactionSummary } from "@/lib/reactions";
+import { empty, join, sql, type Sql } from "@/lib/sql";
+import type { ModerationStatus, Visibility } from "../types";
 import { canModify } from "./manage";
 
 export interface FeedItem {
@@ -40,57 +41,89 @@ export interface FeedFilters {
   query?: string;
 }
 
-const include = {
-  card: {
-    select: { id: true, slug: true, title: true, tagline: true, illustration: true, tone: true },
-  },
-  value: { select: { id: true, name: true } },
-  sender: { select: { id: true, name: true } },
-  recipients: {
-    select: { user: { select: { id: true, name: true } } },
-    orderBy: { user: { name: "asc" } },
-  },
-  reactions: {
-    select: { emoji: true, userId: true, user: { select: { name: true } } },
-    orderBy: { createdAt: "asc" },
-  },
-  _count: { select: { comments: { where: { deletedAt: null } } } },
-} satisfies Prisma.ShoutoutInclude;
-
-type ShoutoutWithRelations = Prisma.ShoutoutGetPayload<{ include: typeof include }>;
-
-/** Public shoutouts, plus private ones the viewer sent or received. */
-export function visibleTo(viewerId: string): Prisma.ShoutoutWhereInput {
-  return {
-    deletedAt: null,
-    moderationStatus: "VISIBLE",
-    OR: [
-      { visibility: "PUBLIC" },
-      { senderId: viewerId },
-      { recipients: { some: { userId: viewerId } } },
-    ],
-  };
+/** A shoutout with everything needed to show it, as returned by `loadShoutoutRows`. */
+export interface ShoutoutRow {
+  id: string;
+  message: string;
+  visibility: Visibility;
+  moderationStatus: ModerationStatus;
+  senderId: string;
+  createdAt: Date;
+  editedAt: Date | null;
+  deletedAt: Date | null;
+  card: FeedItem["card"];
+  value: FeedItem["value"];
+  sender: FeedItem["sender"];
+  recipients: FeedItem["recipients"];
+  reactions: { emoji: string; userId: string; user: { name: string } }[];
+  commentCount: number;
 }
 
-export function involving(personId: string): Prisma.ShoutoutWhereInput {
-  return { OR: [{ senderId: personId }, { recipients: { some: { userId: personId } } }] };
+/** Public shoutouts, plus private ones the viewer sent or received. Uses the alias `s`. */
+export function visibleTo(viewerId: string): Sql {
+  return sql`(s.deleted_at IS NULL AND s.moderation_status = 'VISIBLE' AND (
+    s.visibility = 'PUBLIC' OR s.sender_id = ${viewerId}
+    OR EXISTS (SELECT 1 FROM shoutout_recipients vr WHERE vr.shoutout_id = s.id AND vr.user_id = ${viewerId})
+  ))`;
+}
+
+export function involving(personId: string): Sql {
+  return sql`(s.sender_id = ${personId}
+    OR EXISTS (SELECT 1 FROM shoutout_recipients ir WHERE ir.shoutout_id = s.id AND ir.user_id = ${personId}))`;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export function filtersWhere(filters: FeedFilters): Prisma.ShoutoutWhereInput[] {
-  const where: Prisma.ShoutoutWhereInput[] = [];
+export function filtersWhere(filters: FeedFilters): Sql[] {
+  const where: Sql[] = [];
   if (filters.personId) where.push(involving(filters.personId));
-  if (filters.valueId) where.push({ valueId: filters.valueId });
-  if (filters.cardId) where.push({ cardId: filters.cardId });
-  if (filters.from) where.push({ createdAt: { gte: filters.from } });
-  if (filters.to) where.push({ createdAt: { lt: new Date(filters.to.getTime() + DAY_MS) } });
+  if (filters.valueId) where.push(sql`s.value_id = ${filters.valueId}`);
+  if (filters.cardId) where.push(sql`s.card_id = ${filters.cardId}`);
+  if (filters.from) where.push(sql`s.created_at >= ${filters.from}`);
+  if (filters.to) where.push(sql`s.created_at < ${new Date(filters.to.getTime() + DAY_MS)}`);
   const query = filters.query?.trim();
-  if (query) where.push({ message: { contains: query, mode: "insensitive" } });
+  if (query) {
+    where.push(sql`s.message ILIKE ${`%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`}`);
+  }
   return where;
 }
 
-function toFeedItem(row: ShoutoutWithRelations, viewerId: string, now: Date): FeedItem {
+/** Loads shoutouts (alias `s`) with their card, value, people, reactions and comment count. */
+export function loadShoutoutRows(
+  db: Db,
+  where: Sql,
+  { orderBy = sql`s.created_at DESC, s.id DESC`, limit }: { orderBy?: Sql; limit: number },
+): Promise<ShoutoutRow[]> {
+  return db.rows<ShoutoutRow>(sql`
+    SELECT
+      s.id, s.message, s.visibility, s.moderation_status AS "moderationStatus",
+      s.sender_id AS "senderId", s.created_at AS "createdAt", s.edited_at AS "editedAt",
+      s.deleted_at AS "deletedAt",
+      json_build_object('id', c.id, 'slug', c.slug, 'title', c.title, 'tagline', c.tagline,
+        'illustration', c.illustration, 'tone', c.tone) AS card,
+      json_build_object('id', v.id, 'name', v.name) AS value,
+      json_build_object('id', u.id, 'name', u.name) AS sender,
+      COALESCE((
+        SELECT json_agg(json_build_object('id', ru.id, 'name', ru.name) ORDER BY ru.name, ru.id)
+        FROM shoutout_recipients rr JOIN users ru ON ru.id = rr.user_id
+        WHERE rr.shoutout_id = s.id), '[]') AS recipients,
+      COALESCE((
+        SELECT json_agg(json_build_object('emoji', re.emoji, 'userId', re.user_id,
+          'user', json_build_object('name', reu.name)) ORDER BY re.created_at, re.user_id)
+        FROM reactions re JOIN users reu ON reu.id = re.user_id
+        WHERE re.shoutout_id = s.id), '[]') AS reactions,
+      (SELECT COUNT(*)::int FROM comments cm
+        WHERE cm.shoutout_id = s.id AND cm.deleted_at IS NULL) AS "commentCount"
+    FROM shoutouts s
+    JOIN cards c ON c.id = s.card_id
+    JOIN company_values v ON v.id = s.value_id
+    JOIN users u ON u.id = s.sender_id
+    WHERE ${where}
+    ORDER BY ${orderBy}
+    LIMIT ${limit}`);
+}
+
+export function toFeedItem(row: ShoutoutRow, viewerId: string, now: Date): FeedItem {
   return {
     id: row.id,
     message: row.message,
@@ -100,9 +133,9 @@ function toFeedItem(row: ShoutoutWithRelations, viewerId: string, now: Date): Fe
     card: row.card,
     value: row.value,
     sender: row.sender,
-    recipients: row.recipients.map((r) => r.user),
+    recipients: row.recipients,
     reactions: summarizeReactions(row.reactions, viewerId),
-    commentCount: row._count.comments,
+    commentCount: row.commentCount,
     canModify: canModify(row, viewerId, now),
     canReport: row.senderId !== viewerId,
   };
@@ -117,16 +150,13 @@ export interface Page {
 export async function listShoutouts(
   db: Db,
   viewerId: string,
-  where: Prisma.ShoutoutWhereInput,
+  where: Sql,
   { cursor, limit = 20, now = new Date() }: { cursor?: string; limit?: number; now?: Date } = {},
 ): Promise<Page> {
-  const rows = await db.shoutout.findMany({
-    where,
-    include,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    take: limit + 1,
-    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-  });
+  const afterCursor = cursor
+    ? sql`AND (s.created_at, s.id) < (SELECT created_at, id FROM shoutouts WHERE id = ${cursor})`
+    : empty;
+  const rows = await loadShoutoutRows(db, sql`${where} ${afterCursor}`, { limit: limit + 1 });
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
   return {
@@ -144,7 +174,7 @@ export function listFeed(
   return listShoutouts(
     db,
     viewerId,
-    { AND: [visibleTo(viewerId), ...filtersWhere(filters)] },
+    join([visibleTo(viewerId), ...filtersWhere(filters)], " AND "),
     paging,
   );
 }
@@ -155,6 +185,8 @@ export async function getVisibleShoutout(
   id: string,
   now = new Date(),
 ): Promise<FeedItem | null> {
-  const row = await db.shoutout.findFirst({ where: { id, ...visibleTo(viewerId) }, include });
+  const [row] = await loadShoutoutRows(db, sql`s.id = ${id} AND ${visibleTo(viewerId)}`, {
+    limit: 1,
+  });
   return row ? toFeedItem(row, viewerId, now) : null;
 }

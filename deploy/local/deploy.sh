@@ -47,17 +47,17 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
   TAG="$(git -C "$ROOT" rev-parse --short HEAD)-$(date +%s)"
   log "Building images (tag $TAG)"
   BUILD_LOG="$(mktemp)"
-  if ! { docker build -t "shoutout:$TAG" "$ROOT" && docker build --target migrator -t "shoutout-migrate:$TAG" "$ROOT"; } >"$BUILD_LOG" 2>&1; then
+  if ! docker build -t "shoutout:$TAG" "$ROOT" >"$BUILD_LOG" 2>&1; then
     tail -40 "$BUILD_LOG"
     echo "Image build failed (full log: $BUILD_LOG)" >&2
     exit 1
   fi
   if [[ -z "${SKIP_SECURITY_SCAN:-}" ]]; then
-    "$ROOT/scripts/security-scan.sh" "shoutout:$TAG" "shoutout-migrate:$TAG"
+    "$ROOT/scripts/security-scan.sh" "shoutout:$TAG"
   fi
   for node in $(k3d node list --no-headers | awk -v c="$CLUSTER" '$3==c && ($2=="server" || $2=="agent") {print $1}'); do
     log "Importing images into $node"
-    docker save "shoutout:$TAG" "shoutout-migrate:$TAG" | docker exec -i "$node" ctr -n k8s.io images import - >/dev/null
+    docker save "shoutout:$TAG" | docker exec -i "$node" ctr -n k8s.io images import - >/dev/null
   done
   echo "$TAG" > "$TAG_FILE"
 

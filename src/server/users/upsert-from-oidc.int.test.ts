@@ -1,3 +1,5 @@
+import { sql } from "@/lib/sql";
+import { count } from "../../../test/factories";
 import { describe, expect, it } from "vitest";
 import { useTestDb } from "../../../test/db";
 import { upsertUserFromOidc } from "./upsert-from-oidc";
@@ -24,7 +26,7 @@ describe("upsertUserFromOidc (postgres)", () => {
 
   it("updates the existing user on later sign-ins", async () => {
     await upsertUserFromOidc(db, { sub: "kc-1", email: "alice@example.com", name: "Alice" });
-    await db.user.update({ where: { keycloakId: "kc-1" }, data: { active: false } });
+    await db.execute(sql`UPDATE users SET active = false WHERE keycloak_id = 'kc-1'`);
 
     const user = await upsertUserFromOidc(db, {
       sub: "kc-1",
@@ -35,7 +37,7 @@ describe("upsertUserFromOidc (postgres)", () => {
     expect(user.name).toBe("Alice Renamed");
     expect(user.avatarUrl).toBeNull();
     expect(user.active).toBe(true);
-    expect(await db.user.count()).toBe(1);
+    expect(await count(db, "users")).toBe(1);
   });
 
   it("rejects profiles without sub or email", async () => {
@@ -62,6 +64,6 @@ describe("upsertUserFromOidc relinking (postgres)", () => {
     });
     expect(relinked.id).toBe(original.id);
     expect(relinked.keycloakId).toBe("new-id");
-    expect(await db.user.count()).toBe(1);
+    expect(await count(db, "users")).toBe(1);
   });
 });

@@ -1,11 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const findUnique = vi.fn();
+const getCard = vi.fn();
 vi.mock("@/app/admin/guard", () => ({
   requireAdmin: async () => ({ id: "a", roles: ["shoutout-admin"] }),
 }));
-vi.mock("@/lib/db", () => ({ getDb: () => ({ card: { findUnique } }) }));
+vi.mock("@/lib/db", () => ({ getDb: () => ({ db: true }) }));
+vi.mock("@/server/admin/catalog", () => ({ getCard }));
 vi.mock("@/app/actions/admin", () => ({ saveCardAction: vi.fn() }));
 vi.mock("@/components/layout/app-header", () => ({ AppHeader: () => <header /> }));
 vi.mock("next/navigation", () => ({
@@ -25,12 +26,12 @@ describe("EditCardPage", () => {
   });
 
   it("404s for unknown cards", async () => {
-    findUnique.mockResolvedValue(null);
+    getCard.mockResolvedValue(null);
     await expect(EditCardPage(props)).rejects.toThrow("NOT_FOUND");
   });
 
   it("prefills the card, with safe fallbacks for unknown artwork", async () => {
-    findUnique.mockResolvedValue({
+    getCard.mockResolvedValue({
       id: "c1",
       title: "Mentor",
       tagline: "Grow",
@@ -44,6 +45,6 @@ describe("EditCardPage", () => {
       submitLabel: "Save card",
       initial: { title: "Mentor", tagline: "Grow", illustration: "sprout", tone: "coral" },
     });
-    expect(findUnique).toHaveBeenCalledWith({ where: { id: "c1" } });
+    expect(getCard).toHaveBeenCalledWith({ db: true }, "c1");
   });
 });

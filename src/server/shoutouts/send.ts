@@ -1,7 +1,9 @@
 import type { AppConfig } from "@/lib/config";
 import type { Db } from "@/lib/db";
+import { sql } from "@/lib/sql";
 import { DomainError } from "../errors";
 import { getBudget } from "./budget";
+import { SHOUTOUT_COLUMNS, type ShoutoutRecord } from "./record";
 import type { SendShoutoutInput } from "./validation";
 
 export async function sendShoutout(
@@ -10,7 +12,7 @@ export async function sendShoutout(
   input: SendShoutoutInput,
   config: Pick<AppConfig, "quarterlyBudget">,
   now = new Date(),
-) {
+): Promise<ShoutoutRecord> {
   const recipientIds = [...new Set(input.recipientIds)];
   if (recipientIds.includes(senderId)) {
     throw new DomainError(
@@ -20,20 +22,14 @@ export async function sendShoutout(
     );
   }
 
-  return db.$transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     // Serialise sends per sender so concurrent requests can't overspend the budget.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${senderId}))`;
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${senderId}))`);
 
     const [card, value, recipients] = await Promise.all([
-      tx.card.findFirst({ where: { id: input.cardId, active: true }, select: { id: true } }),
-      tx.companyValue.findFirst({
-        where: { id: input.valueId, active: true },
-        select: { id: true },
-      }),
-      tx.user.findMany({
-        where: { id: { in: recipientIds }, active: true },
-        select: { id: true },
-      }),
+      tx.one(sql`SELECT id FROM cards WHERE id = ${input.cardId} AND active`),
+      tx.one(sql`SELECT id FROM company_values WHERE id = ${input.valueId} AND active`),
+      tx.rows(sql`SELECT id FROM users WHERE id = ANY(${recipientIds}::text[]) AND active`),
     ]);
     if (!card) throw new DomainError("CARD_NOT_FOUND", "That card isn't available", "cardId");
     if (!value) {
@@ -58,16 +54,13 @@ export async function sendShoutout(
       );
     }
 
-    return tx.shoutout.create({
-      data: {
-        senderId,
-        cardId: input.cardId,
-        valueId: input.valueId,
-        message: input.message,
-        visibility: input.visibility,
-        createdAt: now,
-        recipients: { create: recipientIds.map((userId) => ({ userId })) },
-      },
-    });
+    const shoutout = (await tx.one<ShoutoutRecord>(sql`
+      INSERT INTO shoutouts (sender_id, card_id, value_id, message, visibility, created_at, updated_at)
+      VALUES (${senderId}, ${input.cardId}, ${input.valueId}, ${input.message}, ${input.visibility}, ${now}, ${now})
+      RETURNING ${SHOUTOUT_COLUMNS}`))!;
+    await tx.execute(sql`
+      INSERT INTO shoutout_recipients (shoutout_id, user_id)
+      SELECT ${shoutout.id}, unnest(${recipientIds}::text[])`);
+    return shoutout;
   });
 }

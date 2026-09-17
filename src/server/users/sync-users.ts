@@ -1,4 +1,5 @@
 import type { Db } from "@/lib/db";
+import { sql } from "@/lib/sql";
 import {
   fetchAllUsers,
   fetchServiceToken,
@@ -29,25 +30,24 @@ export async function syncUsers(db: Db, users: KeycloakUser[]): Promise<SyncResu
       continue;
     }
     seen.push(user.id);
-    const data = {
-      email: user.email!.toLowerCase(),
-      name: displayName({
-        given_name: user.firstName,
-        family_name: user.lastName,
-        preferred_username: user.username,
-      }),
-      active: user.enabled,
-    };
+    const email = user.email!.toLowerCase();
+    const name = displayName({
+      given_name: user.firstName,
+      family_name: user.lastName,
+      preferred_username: user.username,
+    });
     try {
-      const existing = await findByKeycloakIdOrEmail(db, user.id, data.email);
+      const existing = await findByKeycloakIdOrEmail(db, user.id, email);
       if (existing) {
-        await db.user.update({
-          where: { id: existing.id },
-          data: { keycloakId: user.id, ...data },
-        });
+        await db.execute(sql`
+          UPDATE users SET keycloak_id = ${user.id}, email = ${email}, name = ${name},
+            active = ${user.enabled}, updated_at = now()
+          WHERE id = ${existing.id}`);
         result.updated++;
       } else {
-        await db.user.create({ data: { keycloakId: user.id, ...data } });
+        await db.execute(sql`
+          INSERT INTO users (keycloak_id, email, name, active)
+          VALUES (${user.id}, ${email}, ${name}, ${user.enabled})`);
         result.created++;
       }
     } catch (error) {
@@ -59,11 +59,9 @@ export async function syncUsers(db: Db, users: KeycloakUser[]): Promise<SyncResu
 
   // Never deactivate everyone because Keycloak returned an empty list.
   if (seen.length > 0) {
-    const { count } = await db.user.updateMany({
-      where: { keycloakId: { notIn: seen }, active: true },
-      data: { active: false },
-    });
-    result.deactivated = count;
+    result.deactivated = await db.execute(sql`
+      UPDATE users SET active = false, updated_at = now()
+      WHERE active AND keycloak_id <> ALL(${seen}::text[])`);
   }
   return result;
 }

@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { CARD_TONES } from "@/components/cards/designs";
 import { ILLUSTRATION_NAMES } from "@/components/cards/illustrations";
-import type { Db } from "@/lib/db";
+import { pgErrorCode, type Db } from "@/lib/db";
+import { sql } from "@/lib/sql";
 import { DomainError } from "../errors";
 import { recordAudit } from "./audit";
 import { moveInOrder, type Direction } from "./ordering";
@@ -27,6 +28,28 @@ export const valueSchema = z.object({
 
 export type CardInput = z.output<typeof cardSchema>;
 
+export interface CardRecord {
+  id: string;
+  slug: string;
+  title: string;
+  tagline: string;
+  illustration: string;
+  tone: string;
+  active: boolean;
+  sortOrder: number;
+}
+
+export interface ValueRecord {
+  id: string;
+  slug: string;
+  name: string;
+  active: boolean;
+  sortOrder: number;
+}
+
+const CARD_COLUMNS = sql`id, slug, title, tagline, illustration, tone, active, sort_order AS "sortOrder"`;
+const VALUE_COLUMNS = sql`id, slug, name, active, sort_order AS "sortOrder"`;
+
 /** "Above & Beyond!" -> "above-beyond" */
 export function slugify(text: string): string {
   return (
@@ -49,36 +72,33 @@ async function uniqueSlug(
   return slug;
 }
 
-/** Prisma error code, checked structurally (error classes can differ between bundles). */
-function prismaCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String((error as { code: unknown }).code)
-    : undefined;
-}
-
-const isDuplicate = (error: unknown) => prismaCode(error) === "P2002";
+const UNIQUE_VIOLATION = "23505";
 
 // ---- cards ----
 
-export async function listAllCards(db: Db) {
-  const cards = await db.card.findMany({
-    orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
-    include: { _count: { select: { shoutouts: { where: { deletedAt: null } } } } },
-  });
-  return cards.map(({ _count, ...card }) => ({ ...card, uses: _count.shoutouts }));
+export function getCard(db: Db, id: string) {
+  return db.one<CardRecord>(sql`SELECT ${CARD_COLUMNS} FROM cards WHERE id = ${id}`);
+}
+
+export function listAllCards(db: Db) {
+  return db.rows<CardRecord & { uses: number }>(sql`
+    SELECT ${CARD_COLUMNS},
+      (SELECT COUNT(*)::int FROM shoutouts s WHERE s.card_id = cards.id AND s.deleted_at IS NULL) AS uses
+    FROM cards ORDER BY sort_order ASC, title ASC`);
 }
 
 export async function createCard(db: Db, adminId: string, input: CardInput) {
   const slug = await uniqueSlug(
-    async (s) => Boolean(await db.card.findUnique({ where: { slug: s } })),
+    async (s) => Boolean(await db.one(sql`SELECT 1 FROM cards WHERE slug = ${s}`)),
     input.title,
   );
-  const last = await db.card.aggregate({ _max: { sortOrder: true } });
   try {
-    return await db.$transaction(async (tx) => {
-      const card = await tx.card.create({
-        data: { ...input, slug, sortOrder: (last._max.sortOrder ?? 0) + 1 },
-      });
+    return await db.transaction(async (tx) => {
+      const card = (await tx.one<CardRecord>(sql`
+        INSERT INTO cards (slug, title, tagline, illustration, tone, sort_order)
+        VALUES (${slug}, ${input.title}, ${input.tagline}, ${input.illustration}, ${input.tone},
+          (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM cards))
+        RETURNING ${CARD_COLUMNS}`))!;
       await recordAudit(tx, {
         actorId: adminId,
         action: "card.created",
@@ -89,16 +109,22 @@ export async function createCard(db: Db, adminId: string, input: CardInput) {
       return card;
     });
   } catch (error) {
-    if (isDuplicate(error))
+    if (pgErrorCode(error) === UNIQUE_VIOLATION) {
       throw new DomainError("DUPLICATE", "A card with that title already exists", "title");
+    }
     throw error;
   }
 }
 
 export async function updateCard(db: Db, adminId: string, id: string, input: CardInput) {
   try {
-    return await db.$transaction(async (tx) => {
-      const card = await tx.card.update({ where: { id }, data: input });
+    return await db.transaction(async (tx) => {
+      const card = await tx.one<CardRecord>(sql`
+        UPDATE cards SET title = ${input.title}, tagline = ${input.tagline},
+          illustration = ${input.illustration}, tone = ${input.tone}, updated_at = now()
+        WHERE id = ${id}
+        RETURNING ${CARD_COLUMNS}`);
+      if (!card) throw new DomainError("NOT_FOUND", "That card doesn't exist");
       await recordAudit(tx, {
         actorId: adminId,
         action: "card.updated",
@@ -109,25 +135,22 @@ export async function updateCard(db: Db, adminId: string, id: string, input: Car
       return card;
     });
   } catch (error) {
-    if (isDuplicate(error))
+    if (pgErrorCode(error) === UNIQUE_VIOLATION) {
       throw new DomainError("DUPLICATE", "A card with that title already exists", "title");
-    if (prismaCode(error) === "P2025") {
-      throw new DomainError("NOT_FOUND", "That card doesn't exist");
     }
     throw error;
   }
 }
 
 export async function moveCard(db: Db, adminId: string, id: string, direction: Direction) {
-  const cards = await db.card.findMany({
-    orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
-    select: { id: true },
-  });
-  const moved = await db.$transaction(async (tx) => {
-    const ok = await moveInOrder(cards, id, direction, (cardId, sortOrder) =>
-      tx.card.update({ where: { id: cardId }, data: { sortOrder } }),
+  return db.transaction(async (tx) => {
+    const cards = await tx.rows<{ id: string }>(
+      sql`SELECT id FROM cards ORDER BY sort_order ASC, title ASC FOR UPDATE`,
     );
-    if (ok)
+    const moved = await moveInOrder(cards, id, direction, (cardId, sortOrder) =>
+      tx.execute(sql`UPDATE cards SET sort_order = ${sortOrder} WHERE id = ${cardId}`),
+    );
+    if (moved) {
       await recordAudit(tx, {
         actorId: adminId,
         action: "card.moved",
@@ -135,19 +158,24 @@ export async function moveCard(db: Db, adminId: string, id: string, direction: D
         targetId: id,
         details: { direction },
       });
-    return ok;
+    }
+    return moved;
   });
-  return moved;
 }
 
 export async function setCardActive(db: Db, adminId: string, id: string, active: boolean) {
-  return db.$transaction(async (tx) => {
-    const card = await tx.card.findUnique({ where: { id } });
+  return db.transaction(async (tx) => {
+    const card = await tx.one<CardRecord>(
+      sql`SELECT ${CARD_COLUMNS} FROM cards WHERE id = ${id} FOR UPDATE`,
+    );
     if (!card) throw new DomainError("NOT_FOUND", "That card doesn't exist");
-    if (!active && card.active && (await tx.card.count({ where: { active: true } })) <= 1) {
-      throw new DomainError("LAST_ACTIVE", "Keep at least one card available");
+    if (!active && card.active) {
+      const row = await tx.one<{ count: number }>(
+        sql`SELECT COUNT(*)::int AS count FROM cards WHERE active`,
+      );
+      if (row!.count <= 1) throw new DomainError("LAST_ACTIVE", "Keep at least one card available");
     }
-    await tx.card.update({ where: { id }, data: { active } });
+    await tx.execute(sql`UPDATE cards SET active = ${active}, updated_at = now() WHERE id = ${id}`);
     await recordAudit(tx, {
       actorId: adminId,
       action: active ? "card.restored" : "card.retired",
@@ -160,25 +188,24 @@ export async function setCardActive(db: Db, adminId: string, id: string, active:
 
 // ---- values ----
 
-export async function listAllValues(db: Db) {
-  const values = await db.companyValue.findMany({
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    include: { _count: { select: { shoutouts: { where: { deletedAt: null } } } } },
-  });
-  return values.map(({ _count, ...value }) => ({ ...value, uses: _count.shoutouts }));
+export function listAllValues(db: Db) {
+  return db.rows<ValueRecord & { uses: number }>(sql`
+    SELECT ${VALUE_COLUMNS},
+      (SELECT COUNT(*)::int FROM shoutouts s WHERE s.value_id = company_values.id AND s.deleted_at IS NULL) AS uses
+    FROM company_values ORDER BY sort_order ASC, name ASC`);
 }
 
 export async function createValue(db: Db, adminId: string, name: string) {
   const slug = await uniqueSlug(
-    async (s) => Boolean(await db.companyValue.findUnique({ where: { slug: s } })),
+    async (s) => Boolean(await db.one(sql`SELECT 1 FROM company_values WHERE slug = ${s}`)),
     name,
   );
-  const last = await db.companyValue.aggregate({ _max: { sortOrder: true } });
   try {
-    return await db.$transaction(async (tx) => {
-      const value = await tx.companyValue.create({
-        data: { name, slug, sortOrder: (last._max.sortOrder ?? 0) + 1 },
-      });
+    return await db.transaction(async (tx) => {
+      const value = (await tx.one<ValueRecord>(sql`
+        INSERT INTO company_values (slug, name, sort_order)
+        VALUES (${slug}, ${name}, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM company_values))
+        RETURNING ${VALUE_COLUMNS}`))!;
       await recordAudit(tx, {
         actorId: adminId,
         action: "value.created",
@@ -189,18 +216,23 @@ export async function createValue(db: Db, adminId: string, name: string) {
       return value;
     });
   } catch (error) {
-    if (isDuplicate(error))
+    if (pgErrorCode(error) === UNIQUE_VIOLATION) {
       throw new DomainError("DUPLICATE", "A value with that name already exists", "name");
+    }
     throw error;
   }
 }
 
 export async function renameValue(db: Db, adminId: string, id: string, name: string) {
   try {
-    return await db.$transaction(async (tx) => {
-      const before = await tx.companyValue.findUnique({ where: { id } });
+    return await db.transaction(async (tx) => {
+      const before = await tx.one<ValueRecord>(
+        sql`SELECT ${VALUE_COLUMNS} FROM company_values WHERE id = ${id}`,
+      );
       if (!before) throw new DomainError("NOT_FOUND", "That value doesn't exist");
-      const value = await tx.companyValue.update({ where: { id }, data: { name } });
+      const value = (await tx.one<ValueRecord>(sql`
+        UPDATE company_values SET name = ${name}, updated_at = now() WHERE id = ${id}
+        RETURNING ${VALUE_COLUMNS}`))!;
       await recordAudit(tx, {
         actorId: adminId,
         action: "value.renamed",
@@ -211,22 +243,22 @@ export async function renameValue(db: Db, adminId: string, id: string, name: str
       return value;
     });
   } catch (error) {
-    if (isDuplicate(error))
+    if (pgErrorCode(error) === UNIQUE_VIOLATION) {
       throw new DomainError("DUPLICATE", "A value with that name already exists", "name");
+    }
     throw error;
   }
 }
 
 export async function moveValue(db: Db, adminId: string, id: string, direction: Direction) {
-  const values = await db.companyValue.findMany({
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    select: { id: true },
-  });
-  return db.$transaction(async (tx) => {
-    const ok = await moveInOrder(values, id, direction, (valueId, sortOrder) =>
-      tx.companyValue.update({ where: { id: valueId }, data: { sortOrder } }),
+  return db.transaction(async (tx) => {
+    const values = await tx.rows<{ id: string }>(
+      sql`SELECT id FROM company_values ORDER BY sort_order ASC, name ASC FOR UPDATE`,
     );
-    if (ok)
+    const moved = await moveInOrder(values, id, direction, (valueId, sortOrder) =>
+      tx.execute(sql`UPDATE company_values SET sort_order = ${sortOrder} WHERE id = ${valueId}`),
+    );
+    if (moved) {
       await recordAudit(tx, {
         actorId: adminId,
         action: "value.moved",
@@ -234,22 +266,27 @@ export async function moveValue(db: Db, adminId: string, id: string, direction: 
         targetId: id,
         details: { direction },
       });
-    return ok;
+    }
+    return moved;
   });
 }
 
 export async function setValueActive(db: Db, adminId: string, id: string, active: boolean) {
-  return db.$transaction(async (tx) => {
-    const value = await tx.companyValue.findUnique({ where: { id } });
+  return db.transaction(async (tx) => {
+    const value = await tx.one<ValueRecord>(
+      sql`SELECT ${VALUE_COLUMNS} FROM company_values WHERE id = ${id} FOR UPDATE`,
+    );
     if (!value) throw new DomainError("NOT_FOUND", "That value doesn't exist");
-    if (
-      !active &&
-      value.active &&
-      (await tx.companyValue.count({ where: { active: true } })) <= 1
-    ) {
-      throw new DomainError("LAST_ACTIVE", "Keep at least one value available");
+    if (!active && value.active) {
+      const row = await tx.one<{ count: number }>(
+        sql`SELECT COUNT(*)::int AS count FROM company_values WHERE active`,
+      );
+      if (row!.count <= 1)
+        throw new DomainError("LAST_ACTIVE", "Keep at least one value available");
     }
-    await tx.companyValue.update({ where: { id }, data: { active } });
+    await tx.execute(
+      sql`UPDATE company_values SET active = ${active}, updated_at = now() WHERE id = ${id}`,
+    );
     await recordAudit(tx, {
       actorId: adminId,
       action: active ? "value.restored" : "value.retired",

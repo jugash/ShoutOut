@@ -3,15 +3,20 @@ import type { JWT } from "next-auth/jwt";
 import type { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 import type { Db } from "@/lib/db";
-import { buildAuthConfig, SESSION_MAX_AGE_SECONDS } from "./config";
+
+const upsertUserFromOidc = vi.fn();
+vi.mock("../users/upsert-from-oidc", () => ({ upsertUserFromOidc }));
+
+const { buildAuthConfig, SESSION_MAX_AGE_SECONDS } = await import("./config");
 
 function fakeDb() {
-  // A first sign-in: no existing user, so one is created.
-  const upsert = vi
-    .fn()
-    .mockResolvedValue({ id: "user-1", name: "Alice Admin", email: "alice@example.com" });
-  const user = { findUnique: vi.fn().mockResolvedValue(null), create: upsert, update: upsert };
-  return { db: { user } as unknown as Db, upsert };
+  upsertUserFromOidc.mockReset();
+  upsertUserFromOidc.mockResolvedValue({
+    id: "user-1",
+    name: "Alice Admin",
+    email: "alice@example.com",
+  });
+  return { db: { fake: true } as unknown as Db, upsert: upsertUserFromOidc };
 }
 
 function request(pathname: string) {

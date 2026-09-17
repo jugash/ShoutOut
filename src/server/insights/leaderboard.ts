@@ -1,5 +1,5 @@
-import { Prisma } from "@/generated/prisma/client";
 import type { Db } from "@/lib/db";
+import { join, sql, type Sql } from "@/lib/sql";
 import type { DateRange } from "./periods";
 
 export interface RankedEntry {
@@ -18,11 +18,12 @@ export interface Board {
   max: number;
 }
 
-function rangeSql(range: DateRange): Prisma.Sql {
-  const parts = [Prisma.sql`s.deleted_at IS NULL`, Prisma.sql`s.moderation_status = 'VISIBLE'`];
-  if (range.start) parts.push(Prisma.sql`s.created_at >= ${range.start}`);
-  if (range.end) parts.push(Prisma.sql`s.created_at < ${range.end}`);
-  return Prisma.join(parts, " AND ");
+/** Visible (not deleted or moderated) shoutouts in the range; uses the alias `s`. */
+function rangeSql(range: DateRange): Sql {
+  const parts = [sql`s.deleted_at IS NULL`, sql`s.moderation_status = 'VISIBLE'`];
+  if (range.start) parts.push(sql`s.created_at >= ${range.start}`);
+  if (range.end) parts.push(sql`s.created_at < ${range.end}`);
+  return join(parts, " AND ");
 }
 
 function toBoard(rows: RankedEntry[], limit: number, viewerId?: string): Board {
@@ -45,7 +46,7 @@ export async function topRecipients(
   limit = 10,
   viewerId?: string,
 ): Promise<Board> {
-  const rows = await db.$queryRaw<RankedEntry[]>`
+  const rows = await db.rows<RankedEntry>(sql`
     SELECT u.id, u.name, COUNT(*)::int AS count,
            RANK() OVER (ORDER BY COUNT(*) DESC)::int AS rank
     FROM shoutout_recipients r
@@ -53,7 +54,7 @@ export async function topRecipients(
     JOIN users u ON u.id = r.user_id
     WHERE u.active AND ${rangeSql(range)}
     GROUP BY u.id, u.name
-    ORDER BY count DESC, u.name ASC`;
+    ORDER BY count DESC, u.name ASC`);
   return toBoard(rows, limit, viewerId);
 }
 
@@ -64,7 +65,7 @@ export async function topSenders(
   limit = 10,
   viewerId?: string,
 ): Promise<Board> {
-  const rows = await db.$queryRaw<RankedEntry[]>`
+  const rows = await db.rows<RankedEntry>(sql`
     SELECT u.id, u.name, COUNT(*)::int AS count,
            RANK() OVER (ORDER BY COUNT(*) DESC)::int AS rank
     FROM shoutout_recipients r
@@ -72,20 +73,20 @@ export async function topSenders(
     JOIN users u ON u.id = s.sender_id
     WHERE u.active AND ${rangeSql(range)}
     GROUP BY u.id, u.name
-    ORDER BY count DESC, u.name ASC`;
+    ORDER BY count DESC, u.name ASC`);
   return toBoard(rows, limit, viewerId);
 }
 
 /** Company values by number of shoutouts. */
 export async function topValues(db: Db, range: DateRange): Promise<Board> {
-  const rows = await db.$queryRaw<RankedEntry[]>`
+  const rows = await db.rows<RankedEntry>(sql`
     SELECT v.id, v.name, COUNT(*)::int AS count,
            RANK() OVER (ORDER BY COUNT(*) DESC)::int AS rank
     FROM shoutouts s
     JOIN company_values v ON v.id = s.value_id
     WHERE ${rangeSql(range)}
     GROUP BY v.id, v.name
-    ORDER BY count DESC, v.name ASC`;
+    ORDER BY count DESC, v.name ASC`);
   return toBoard(rows, rows.length);
 }
 

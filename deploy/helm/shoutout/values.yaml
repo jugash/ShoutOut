@@ -43,11 +43,6 @@ app:
     repository: ghcr.io/jugash/shoutout
     tag: ""            # defaults to .Chart.AppVersion
     pullPolicy: IfNotPresent
-  migrations:
-    image:
-      repository: ghcr.io/jugash/shoutout-migrate
-      tag: ""          # defaults to app.image.tag
-      pullPolicy: IfNotPresent
   imagePullSecrets: []
   podAnnotations: {}
   extraEnv: []

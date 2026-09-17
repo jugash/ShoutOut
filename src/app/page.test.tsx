@@ -8,7 +8,7 @@ const redirect = vi.fn(() => {
 });
 const getBudget = vi.fn();
 const listFeed = vi.fn();
-const findUnique = vi.fn();
+const findPerson = vi.fn();
 const FeedFilters = vi.fn(
   (_props: { options: FeedFilterOptions; active: boolean; person: unknown }) => <div>filters</div>,
 );
@@ -26,7 +26,8 @@ const FeedList = vi.fn(
 
 vi.mock("@/auth", () => ({ auth }));
 vi.mock("next/navigation", () => ({ redirect }));
-vi.mock("@/lib/db", () => ({ getDb: () => ({ user: { findUnique } }) }));
+vi.mock("@/lib/db", () => ({ getDb: () => ({}) }));
+vi.mock("@/server/users/search", () => ({ findPerson }));
 vi.mock("@/server/shoutouts/budget", () => ({ getBudget }));
 vi.mock("@/server/shoutouts/feed", () => ({ listFeed }));
 vi.mock("@/server/shoutouts/catalog", () => ({
@@ -89,7 +90,7 @@ describe("HomePage", () => {
       active: false,
       person: null,
     });
-    expect(findUnique).not.toHaveBeenCalled();
+    expect(findPerson).not.toHaveBeenCalled();
     expect(FeedList.mock.calls[0][0]).toMatchObject({ viewerName: "Bob Baker", nextHref: null });
   });
 
@@ -98,7 +99,7 @@ describe("HomePage", () => {
       items: [{ id: "s1", message: "Great work" }],
       nextCursor: "s1",
     });
-    findUnique.mockResolvedValue({ id: "u2", name: "Carol", email: "c@x" });
+    findPerson.mockResolvedValue({ id: "u2", name: "Carol", email: "c@x" });
     render(
       await HomePage(props({ notice: "sent", person: "u2", value: "v1", from: "2026-09-01" })),
     );

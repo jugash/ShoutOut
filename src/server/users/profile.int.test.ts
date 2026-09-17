@@ -1,3 +1,4 @@
+import { toQuery } from "@/lib/sql";
 import { describe, expect, it } from "vitest";
 import { useTestDb } from "../../../test/db";
 import { CARD_ID, createUser, OTHER_VALUE_ID, VALUE_ID } from "../../../test/factories";
@@ -63,42 +64,11 @@ describe("profiles (postgres)", () => {
     expect(await getProfile(db, alice.id, "missing")).toBeNull();
   });
 
-  it("labels values that no longer exist", async () => {
-    const [alice, bob] = await Promise.all(
-      ["Alice", "Bob"].map((name) => createUser(db, { name })),
-    );
-    await sendShoutout(
-      db,
-      alice.id,
-      {
-        recipientIds: [bob.id],
-        cardId: CARD_ID,
-        valueId: VALUE_ID,
-        message: "Hi",
-        visibility: "PUBLIC",
-      },
-      config,
-    );
-    // Simulate a value vanishing between the two queries.
-    const profile = await getProfile(
-      new Proxy(db, {
-        get(target, prop) {
-          if (prop === "companyValue") return { findMany: async () => [] };
-          return Reflect.get(target, prop);
-        },
-      }),
-      alice.id,
-      bob.id,
-    );
-    expect(profile?.topValues).toEqual([{ name: "Unknown", count: 1 }]);
-  });
-
   it("builds visibility rules", () => {
-    expect(profileVisibility("a", "b")).toEqual({
-      deletedAt: null,
-      moderationStatus: "VISIBLE",
-      visibility: "PUBLIC",
+    expect(toQuery(profileVisibility("a", "b"))).toEqual({
+      text: "s.deleted_at IS NULL AND s.moderation_status = 'VISIBLE' AND s.visibility = 'PUBLIC'",
+      values: [],
     });
-    expect(profileVisibility("a", "a")).toHaveProperty("OR");
+    expect(toQuery(profileVisibility("a", "a")).values).toEqual(["a", "a"]);
   });
 });

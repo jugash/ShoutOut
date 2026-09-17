@@ -5,6 +5,7 @@ import { AdminShell } from "@/components/admin/admin-shell";
 import { CardForm } from "@/components/admin/card-form";
 import { toCardDesign } from "@/components/cards/designs";
 import { getDb } from "@/lib/db";
+import { getCard } from "@/server/admin/catalog";
 import { requireAdmin } from "../../guard";
 
 export const metadata: Metadata = { title: "Edit card" };
@@ -12,7 +13,7 @@ export const metadata: Metadata = { title: "Edit card" };
 export default async function EditCardPage({ params }: PageProps<"/admin/cards/[id]">) {
   const user = await requireAdmin();
   const { id } = await params;
-  const card = await getDb().card.findUnique({ where: { id } });
+  const card = await getCard(getDb(), id);
   if (!card) {
     notFound();
   }

@@ -1,5 +1,5 @@
-import type { Prisma } from "@/generated/prisma/client";
 import type { Db } from "@/lib/db";
+import { sql, type Sql } from "@/lib/sql";
 import { listShoutouts, visibleTo, type Page } from "../shoutouts/feed";
 
 export type ProfileTab = "received" | "sent";
@@ -16,14 +16,16 @@ export interface Profile {
  * What a viewer may see on someone's profile: other people see only public
  * shoutouts; on your own profile you also see private ones.
  */
-export function profileVisibility(viewerId: string, personId: string): Prisma.ShoutoutWhereInput {
+export function profileVisibility(viewerId: string, personId: string): Sql {
   return viewerId === personId
     ? visibleTo(viewerId)
-    : { deletedAt: null, moderationStatus: "VISIBLE", visibility: "PUBLIC" };
+    : sql`s.deleted_at IS NULL AND s.moderation_status = 'VISIBLE' AND s.visibility = 'PUBLIC'`;
 }
 
-function tabWhere(personId: string, tab: ProfileTab): Prisma.ShoutoutWhereInput {
-  return tab === "sent" ? { senderId: personId } : { recipients: { some: { userId: personId } } };
+function tabWhere(personId: string, tab: ProfileTab): Sql {
+  return tab === "sent"
+    ? sql`s.sender_id = ${personId}`
+    : sql`EXISTS (SELECT 1 FROM shoutout_recipients pr WHERE pr.shoutout_id = s.id AND pr.user_id = ${personId})`;
 }
 
 export async function getProfile(
@@ -31,35 +33,28 @@ export async function getProfile(
   viewerId: string,
   personId: string,
 ): Promise<Profile | null> {
-  const person = await db.user.findUnique({
-    where: { id: personId },
-    select: { id: true, name: true, email: true, active: true },
-  });
+  const person = await db.one<Profile["person"]>(
+    sql`SELECT id, name, email, active FROM users WHERE id = ${personId}`,
+  );
   if (!person) return null;
 
   const visible = profileVisibility(viewerId, personId);
-  const receivedWhere = { AND: [visible, tabWhere(personId, "received")] };
-  const [received, sent, valueCounts] = await Promise.all([
-    db.shoutout.count({ where: receivedWhere }),
-    db.shoutout.count({ where: { AND: [visible, tabWhere(personId, "sent")] } }),
-    db.shoutout.groupBy({
-      by: ["valueId"],
-      where: receivedWhere,
-      _count: { _all: true },
-      orderBy: { _count: { valueId: "desc" } },
-      take: 3,
-    }),
+  const received = sql`${visible} AND ${tabWhere(personId, "received")}`;
+  const [counts, topValues] = await Promise.all([
+    db.one<{ received: number; sent: number }>(sql`
+      SELECT
+        (SELECT COUNT(*)::int FROM shoutouts s WHERE ${received}) AS received,
+        (SELECT COUNT(*)::int FROM shoutouts s WHERE ${visible} AND ${tabWhere(personId, "sent")}) AS sent`),
+    db.rows<{ name: string; count: number }>(sql`
+      SELECT v.name, COUNT(*)::int AS count
+      FROM shoutouts s JOIN company_values v ON v.id = s.value_id
+      WHERE ${received}
+      GROUP BY v.id, v.name
+      ORDER BY count DESC, v.name ASC
+      LIMIT 3`),
   ]);
-  const values = await db.companyValue.findMany({
-    where: { id: { in: valueCounts.map((v) => v.valueId) } },
-    select: { id: true, name: true },
-  });
-  const topValues = valueCounts.map((v) => ({
-    name: values.find((value) => value.id === v.valueId)?.name ?? "Unknown",
-    count: v._count._all,
-  }));
 
-  return { person, isSelf: viewerId === personId, received, sent, topValues };
+  return { person, isSelf: viewerId === personId, ...counts!, topValues };
 }
 
 export function listProfileShoutouts(
@@ -72,7 +67,7 @@ export function listProfileShoutouts(
   return listShoutouts(
     db,
     viewerId,
-    { AND: [profileVisibility(viewerId, personId), tabWhere(personId, tab)] },
+    sql`${profileVisibility(viewerId, personId)} AND ${tabWhere(personId, tab)}`,
     options,
   );
 }

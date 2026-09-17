@@ -58,32 +58,24 @@ jobs:
         run: npm audit --audit-level=high
 
   image:
-    name: Build and scan container images
+    name: Build and scan container image
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - name: app
-            target: runner
-          - name: migrate
-            target: migrator
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3
-      - name: Build ${{ matrix.name }} image
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: .
-          target: ${{ matrix.target }}
           push: false
           load: true
-          tags: shoutout-${{ matrix.name }}:ci
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          tags: shoutout:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Trivy vulnerability scan (fails on fixable high/critical)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: shoutout-${{ matrix.name }}:ci
+          image-ref: shoutout:ci
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"

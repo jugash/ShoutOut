@@ -22,7 +22,6 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     // Generated and report output:
-    "src/generated/**",
     "coverage/**",
     "playwright-report/**",
     "test-results/**",

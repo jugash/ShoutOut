@@ -1,5 +1,7 @@
 import type { Db } from "@/lib/db";
+import { sql } from "@/lib/sql";
 import { DomainError } from "../errors";
+import { SHOUTOUT_COLUMNS, type ShoutoutRecord } from "./record";
 import type { EditShoutoutInput } from "./validation";
 
 export const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -23,9 +25,9 @@ export function canModify(
 }
 
 async function loadModifiable(db: Db, userId: string, id: string, now: Date) {
-  const shoutout = await db.shoutout.findFirst({
-    where: { id, deletedAt: null, moderationStatus: "VISIBLE" },
-  });
+  const shoutout = await db.one<ShoutoutRecord>(sql`
+    SELECT ${SHOUTOUT_COLUMNS} FROM shoutouts
+    WHERE id = ${id} AND deleted_at IS NULL AND moderation_status = 'VISIBLE'`);
   if (!shoutout) throw new DomainError("NOT_FOUND", "That shoutout doesn't exist");
   if (shoutout.senderId !== userId) {
     throw new DomainError("FORBIDDEN", "Only the sender can change this shoutout");
@@ -45,29 +47,34 @@ export async function updateShoutout(
   id: string,
   input: EditShoutoutInput,
   now = new Date(),
-) {
+): Promise<ShoutoutRecord> {
   const shoutout = await loadModifiable(db, userId, id, now);
 
   // A card or value retired after sending can be kept, but not newly chosen.
   if (input.cardId !== shoutout.cardId) {
-    const card = await db.card.findFirst({ where: { id: input.cardId, active: true } });
+    const card = await db.one(sql`SELECT id FROM cards WHERE id = ${input.cardId} AND active`);
     if (!card) throw new DomainError("CARD_NOT_FOUND", "That card isn't available", "cardId");
   }
   if (input.valueId !== shoutout.valueId) {
-    const value = await db.companyValue.findFirst({ where: { id: input.valueId, active: true } });
+    const value = await db.one(
+      sql`SELECT id FROM company_values WHERE id = ${input.valueId} AND active`,
+    );
     if (!value) {
       throw new DomainError("VALUE_NOT_FOUND", "That value isn't available", "valueId");
     }
   }
 
-  return db.shoutout.update({
-    where: { id },
-    data: { ...input, editedAt: now },
-  });
+  return (await db.one<ShoutoutRecord>(sql`
+    UPDATE shoutouts SET card_id = ${input.cardId}, value_id = ${input.valueId},
+      message = ${input.message}, visibility = ${input.visibility}, edited_at = ${now}, updated_at = ${now}
+    WHERE id = ${id}
+    RETURNING ${SHOUTOUT_COLUMNS}`))!;
 }
 
 /** Soft-deletes the shoutout; its recipients no longer count against the budget. */
 export async function deleteShoutout(db: Db, userId: string, id: string, now = new Date()) {
   await loadModifiable(db, userId, id, now);
-  await db.shoutout.update({ where: { id }, data: { deletedAt: now } });
+  await db.execute(
+    sql`UPDATE shoutouts SET deleted_at = ${now}, updated_at = ${now} WHERE id = ${id}`,
+  );
 }
