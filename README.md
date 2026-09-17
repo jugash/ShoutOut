@@ -141,6 +141,10 @@ helm install shoutout oci://ghcr.io/opentooling/charts/shoutout -f my-values.yam
 helm show values oci://ghcr.io/opentooling/charts/shoutout      # all settings
 ```
 
+`deploy/examples/values-production.yaml` is a commented starting point for a
+real cluster: external PostgreSQL and Keycloak, ingress with TLS, replicas, and
+the OpenShift and `extraObjects` settings ready to uncomment.
+
 Chart versions are `<major.minor from Chart.yaml>.<CI run number>`, so a plain
 install gets the newest. Each chart's `appVersion` (the default image tag) is
 the `sha-<commit>` image built from the same commit. Pin with `--version`.

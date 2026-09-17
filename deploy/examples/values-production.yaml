@@ -1,0 +1,93 @@
+# Example values for a real cluster: managed PostgreSQL, existing Keycloak,
+# ingress with TLS. Copy this file, edit it, then:
+#   helm install shoutout oci://ghcr.io/opentooling/charts/shoutout \
+#     -n shoutout --create-namespace -f values-production.yaml
+# Every setting with its default: helm show values oci://ghcr.io/opentooling/charts/shoutout
+
+# Public URL of the app. Sign-in redirects come back here, so it must match what
+# people type in the browser (and the Keycloak client's redirect URIs).
+appUrl: https://shoutout.example.com
+
+# Secrets are read from a secret you create yourself; nothing is generated.
+#   kubectl -n shoutout create secret generic shoutout-secrets \
+#     --from-literal=auth-secret="$(openssl rand -base64 32)" \
+#     --from-literal=keycloak-client-secret=CLIENT_SECRET_FROM_KEYCLOAK \
+#     --from-literal=sync-token="$(openssl rand -base64 32)"
+secrets:
+  existingSecret: shoutout-secrets
+
+config:
+  # Shoutouts each person can send per calendar quarter (one per recipient).
+  quarterlyBudget: 20
+  maxRecipients: 5
+  # "admins" or "everyone": who can open the analytics dashboard.
+  analyticsVisibility: admins
+
+# Use your own PostgreSQL instead of the bundled one. The secret holds a full
+# connection string, e.g. postgresql://user:password@host:5432/shoutout
+postgres:
+  enabled: false
+database:
+  existingSecret: shoutout-db
+  existingSecretKey: database-url
+
+# Use your own Keycloak. The client needs:
+#   - a "roles" mapper adding realm roles to the ID token (shoutout-user, shoutout-admin)
+#   - redirect URI <appUrl>/api/auth/callback/keycloak
+#   - service account with realm-management "view-users" for the people sync
+keycloak:
+  enabled: false
+auth:
+  issuer: https://sso.example.com/realms/example
+  clientId: shoutout-web
+
+app:
+  replicaCount: 2
+  image:
+    # Defaults to the chart's appVersion (the image built from the same commit).
+    # Pin a tag for reproducible rollouts: sha-<commit>, or a release tag.
+    tag: ""
+  ingress:
+    enabled: true
+    className: nginx
+    host: shoutout.example.com
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    tls:
+      - secretName: shoutout-tls
+        hosts: [shoutout.example.com]
+  resources:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { memory: 512Mi }
+
+# Keep the people list in step with Keycloak (also runs when the app starts).
+userSync:
+  enabled: true
+  schedule: "0 * * * *"
+
+# OpenShift: leave IDs to the restricted-v2 SCC.
+# openshift:
+#   enabled: true
+
+# Extra manifests deployed with the release (objects or strings, rendered with tpl).
+# CRDs for any custom resources must already exist in the cluster.
+# extraObjects:
+#   - apiVersion: route.openshift.io/v1
+#     kind: Route
+#     metadata:
+#       name: '{{ include "shoutout.fullname" $ }}-app'
+#     spec:
+#       host: shoutout.apps.example.com
+#       to: { kind: Service, name: '{{ include "shoutout.fullname" $ }}-app' }
+#       port: { targetPort: http }
+#       tls: { termination: edge, insecureEdgeTerminationPolicy: Redirect }
+#   - apiVersion: monitoring.coreos.com/v1
+#     kind: ServiceMonitor
+#     metadata:
+#       name: '{{ include "shoutout.fullname" $ }}'
+#     spec:
+#       selector:
+#         matchLabels:
+#           app.kubernetes.io/name: shoutout
+#           app.kubernetes.io/component: app
+#       endpoints: [{ port: http, path: /api/health }]
