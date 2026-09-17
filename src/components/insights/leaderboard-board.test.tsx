@@ -66,9 +66,11 @@ describe("LeaderboardBoard", () => {
         unit="u"
         board={{ entries: [], viewer: null, max: 0 }}
         emptyText="Nobody yet"
+        footer={<a href="/leaderboard">See all</a>}
       />,
     );
     expect(screen.getByText("Nobody yet")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See all" })).toHaveAttribute("href", "/leaderboard");
     rerender(
       <LeaderboardBoard
         title="t"

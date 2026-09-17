@@ -9,7 +9,18 @@ test.describe("leaderboards and analytics", () => {
     await signInAs(page, "henry");
     await sendShoutout(page, { to: ["Grace Gupta"], message });
 
-    await page.getByRole("link", { name: "Leaderboard" }).click();
+    // The feed sidebar shows this month's most recognised people.
+    const topThisMonth = page.locator("section", {
+      has: page.getByRole("heading", { name: "Top this month" }),
+    });
+    await expect(topThisMonth.getByRole("listitem").first()).toHaveAccessibleName(
+      /^Rank 1: .+, \d+ shoutouts received$/,
+    );
+
+    await page
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("link", { name: "Leaderboard" })
+      .click();
     await expect(page.getByRole("heading", { name: "Leaderboard" })).toBeVisible();
     await page.getByRole("link", { name: "This week" }).click();
     await expect(page).toHaveURL(/period=week/);

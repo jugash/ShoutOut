@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/cn";
 import type { Board, RankedEntry } from "@/server/insights/leaderboard";
@@ -69,6 +70,7 @@ export function LeaderboardBoard({
   people = true,
   viewerId,
   emptyText = "No shoutouts in this period yet.",
+  footer,
 }: {
   title: string;
   description: string;
@@ -77,6 +79,8 @@ export function LeaderboardBoard({
   people?: boolean;
   viewerId?: string;
   emptyText?: string;
+  /** Extra content at the bottom, e.g. a link to the full leaderboard. */
+  footer?: ReactNode;
 }) {
   return (
     <section className="rounded-[var(--radius-card)] border-2 border-border bg-surface p-5 shadow-card">
@@ -106,6 +110,7 @@ export function LeaderboardBoard({
           </ol>
         </div>
       )}
+      {footer && <div className="mt-4">{footer}</div>}
     </section>
   );
 }

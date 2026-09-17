@@ -30,6 +30,8 @@ vi.mock("@/lib/db", () => ({ getDb: () => ({}) }));
 vi.mock("@/server/users/search", () => ({ findPerson }));
 vi.mock("@/server/shoutouts/budget", () => ({ getBudget }));
 vi.mock("@/server/shoutouts/feed", () => ({ listFeed }));
+const topRecipients = vi.fn();
+vi.mock("@/server/insights/leaderboard", () => ({ topRecipients }));
 vi.mock("@/server/shoutouts/catalog", () => ({
   listActiveCards: async () => [
     { id: "c1", slug: "s", title: "Thank You", tagline: "t", illustration: "heart", tone: "coral" },
@@ -59,6 +61,11 @@ describe("HomePage", () => {
     auth.mockResolvedValue({ user: bob });
     getBudget.mockResolvedValue(budget(17));
     listFeed.mockResolvedValue({ items: [], nextCursor: null });
+    topRecipients.mockResolvedValue({
+      entries: [{ id: "u2", name: "Carol Chen", count: 3, rank: 1 }],
+      viewer: null,
+      max: 3,
+    });
   });
 
   afterEach(() => {
@@ -92,6 +99,19 @@ describe("HomePage", () => {
     });
     expect(findPerson).not.toHaveBeenCalled();
     expect(FeedList.mock.calls[0][0]).toMatchObject({ viewerName: "Bob Baker", nextHref: null });
+  });
+
+  it("shows this month's most recognised people in the sidebar", async () => {
+    render(await HomePage(props()));
+    const [, range, limit, viewerId] = topRecipients.mock.calls[0];
+    expect(range.start.getUTCDate()).toBe(1);
+    expect([limit, viewerId]).toEqual([5, "u1"]);
+    expect(screen.getByRole("heading", { name: "Top this month" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Carol Chen" })).toHaveAttribute("href", "/people/u2");
+    expect(screen.getByRole("link", { name: /full leaderboard/i })).toHaveAttribute(
+      "href",
+      "/leaderboard",
+    );
   });
 
   it("lists shoutouts, keeps filters in the next-page link and shows notices", async () => {
