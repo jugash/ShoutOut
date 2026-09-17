@@ -3,8 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AppHeader } from "@/components/layout/app-header";
+import { PeopleSearch } from "@/components/people/people-search";
 import { Avatar } from "@/components/ui/avatar";
-import { buttonClasses } from "@/components/ui/button";
 import { getDb } from "@/lib/db";
 import { searchPeople } from "@/server/users/search";
 
@@ -25,22 +25,10 @@ export default async function PeoplePage({ searchParams }: PageProps<"/people">)
       <AppHeader user={user} />
       <main className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-4 py-8 sm:px-6">
         <h1 className="font-display text-3xl font-semibold">People</h1>
-        <form method="get" className="flex gap-2" role="search">
-          <label htmlFor="people-q" className="sr-only">
-            Search people
-          </label>
-          <input
-            id="people-q"
-            name="q"
-            type="search"
-            defaultValue={query}
-            placeholder="Search by name or email"
-            className="flex-1 rounded-full border-2 border-border bg-surface px-5 py-2.5 text-lg focus:border-teal focus:outline-none"
-          />
-          <button type="submit" className={buttonClasses({ variant: "secondary" })}>
-            Search
-          </button>
-        </form>
+        <PeopleSearch initialQuery={query} />
+        <div aria-live="polite" className="sr-only">
+          {people.length} {people.length === 1 ? "person" : "people"} found
+        </div>
         {people.length === 0 ? (
           <p className="text-muted">Nobody matches &ldquo;{query}&rdquo;.</p>
         ) : (

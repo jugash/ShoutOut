@@ -56,6 +56,8 @@
   --ink: #2b2a33;
   --paper: #fffdf8;
   --line: #2b2a33;
+  /* Single-series chart marks, validated against the light surface. */
+  --chart-mark: #15a19a;
 
   --shadow-card: 0 1px 2px rgb(43 42 51 / 0.06), 0 8px 24px -12px rgb(43 42 51 / 0.18);
 }
@@ -90,6 +92,7 @@
     --leaf-soft: #213d24;
     --paper: #f6f1e7;
     --line: #121117;
+    --chart-mark: #2aa9a0;
     --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
   }
 }
@@ -123,6 +126,7 @@
   --leaf-soft: #213d24;
   --paper: #f6f1e7;
   --line: #121117;
+  --chart-mark: #2aa9a0;
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
 }
 
@@ -136,6 +140,7 @@
   --color-ring: var(--ring);
   --color-ink: var(--ink);
   --color-paper: var(--paper);
+  --color-chart-mark: var(--chart-mark);
 
   --color-sunny: var(--sunny);
   --color-sunny-strong: var(--sunny-strong);

@@ -37,3 +37,12 @@ describe("isAdmin", () => {
     expect(isAdmin(undefined)).toBe(false);
   });
 });
+
+describe("canViewAnalytics", () => {
+  it("allows admins always and everyone when configured", async () => {
+    const { canViewAnalytics } = await import("./roles");
+    expect(canViewAnalytics(["shoutout-admin"], "admins")).toBe(true);
+    expect(canViewAnalytics(["shoutout-user"], "admins")).toBe(false);
+    expect(canViewAnalytics(undefined, "everyone")).toBe(true);
+  });
+});
