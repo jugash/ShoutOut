@@ -21,5 +21,84 @@ model User {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
+  sent     Shoutout[]          @relation("SentShoutouts")
+  received ShoutoutRecipient[]
+
+  @@index([active, name])
   @@map("users")
+}
+
+/// A card design people pick when sending a shoutout.
+model Card {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  title        String
+  tagline      String
+  /// Illustration key, see src/components/cards/illustrations.tsx.
+  illustration String
+  /// Colour tone, see src/components/cards/designs.ts.
+  tone         String
+  active       Boolean  @default(true)
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  shoutouts Shoutout[]
+
+  @@map("cards")
+}
+
+/// A company value a shoutout can be tagged with.
+model CompanyValue {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  shoutouts Shoutout[]
+
+  @@map("company_values")
+}
+
+enum Visibility {
+  PUBLIC
+  PRIVATE
+}
+
+model Shoutout {
+  id         String     @id @default(cuid())
+  senderId   String     @map("sender_id")
+  cardId     String     @map("card_id")
+  valueId    String     @map("value_id")
+  message    String     @db.VarChar(280)
+  visibility Visibility @default(PUBLIC)
+  createdAt  DateTime   @default(now()) @map("created_at")
+  updatedAt  DateTime   @updatedAt @map("updated_at")
+  editedAt   DateTime?  @map("edited_at")
+  /// Set when the sender deletes it; deleted shoutouts are hidden and refund budget.
+  deletedAt  DateTime?  @map("deleted_at")
+
+  sender     User                @relation("SentShoutouts", fields: [senderId], references: [id])
+  card       Card                @relation(fields: [cardId], references: [id])
+  value      CompanyValue        @relation(fields: [valueId], references: [id])
+  recipients ShoutoutRecipient[]
+
+  @@index([createdAt(sort: Desc), id])
+  @@index([senderId, createdAt])
+  @@map("shoutouts")
+}
+
+model ShoutoutRecipient {
+  shoutoutId String @map("shoutout_id")
+  userId     String @map("user_id")
+
+  shoutout Shoutout @relation(fields: [shoutoutId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@id([shoutoutId, userId])
+  @@index([userId])
+  @@map("shoutout_recipients")
 }

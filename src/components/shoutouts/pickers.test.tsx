@@ -1,0 +1,84 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { findCardDesign } from "@/components/cards/designs";
+import { CardPicker, FieldError, MessageField, ValuePicker, VisibilityPicker } from "./pickers";
+
+const cards = [
+  { id: "c1", design: findCardDesign("thank-you")! },
+  { id: "c2", design: findCardDesign("mentor")! },
+];
+const values = [
+  { id: "v1", name: "Integrity" },
+  { id: "v2", name: "Diversity" },
+];
+
+describe("FieldError", () => {
+  it("renders only with a message", () => {
+    const { container, rerender } = render(<FieldError id="e" />);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<FieldError id="e" message="Required" />);
+    expect(screen.getByText("Required")).toHaveAttribute("id", "e");
+  });
+});
+
+describe("CardPicker", () => {
+  it("selects cards and shows errors", async () => {
+    const onChange = vi.fn();
+    render(<CardPicker cards={cards} value="c1" onChange={onChange} error="Pick a card" />);
+    expect(screen.getByRole("radio", { name: "Thank You" })).toBeChecked();
+    await userEvent.click(screen.getByText("Mentor"));
+    expect(onChange).toHaveBeenCalledWith("c2");
+    expect(screen.getByRole("group", { name: "Pick a card" })).toHaveAttribute(
+      "aria-describedby",
+      "cardId-error",
+    );
+    expect(screen.getByText("Pick a card", { selector: "p" })).toBeInTheDocument();
+  });
+
+  it("has no error description when valid", () => {
+    render(<CardPicker cards={cards} value="" onChange={() => {}} />);
+    expect(screen.getByRole("group")).not.toHaveAttribute("aria-describedby");
+  });
+});
+
+describe("ValuePicker", () => {
+  it("selects values", async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ValuePicker values={values} value="v1" onChange={onChange} />);
+    expect(screen.getByRole("radio", { name: "Integrity" })).toBeChecked();
+    expect(screen.getByRole("group")).not.toHaveAttribute("aria-describedby");
+    await userEvent.click(screen.getByText("Diversity"));
+    expect(onChange).toHaveBeenCalledWith("v2");
+    rerender(<ValuePicker values={values} value="" onChange={onChange} error="Pick one" />);
+    expect(screen.getByRole("group")).toHaveAttribute("aria-describedby", "valueId-error");
+  });
+});
+
+describe("VisibilityPicker", () => {
+  it("switches between public and private", async () => {
+    const onChange = vi.fn();
+    render(<VisibilityPicker value="PUBLIC" onChange={onChange} />);
+    expect(screen.getByRole("radio", { name: /public/i })).toBeChecked();
+    await userEvent.click(screen.getByText("Private"));
+    expect(onChange).toHaveBeenCalledWith("PRIVATE");
+  });
+});
+
+describe("MessageField", () => {
+  it("counts characters and warns near the limit", async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<MessageField value="Hello" onChange={onChange} maxLength={20} />);
+    const textarea = screen.getByLabelText("Say thanks");
+    expect(textarea).toHaveAttribute("aria-describedby", "message-count");
+    expect(textarea).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByText("15 characters left")).toHaveClass("text-coral-strong");
+    await userEvent.type(textarea, "!");
+    expect(onChange).toHaveBeenCalledWith("Hello!");
+
+    rerender(<MessageField value="Hi" onChange={onChange} maxLength={280} error="Too short" />);
+    expect(screen.getByText("278 characters left")).toHaveClass("text-muted");
+    expect(textarea).toHaveAttribute("aria-invalid", "true");
+    expect(textarea).toHaveAttribute("aria-describedby", "message-count message-error");
+  });
+});

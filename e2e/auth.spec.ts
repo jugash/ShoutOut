@@ -12,7 +12,7 @@ test.describe("authentication", () => {
     await signInAs(page, "bob");
     await expect(page.getByRole("heading", { name: /hi bob/i })).toBeVisible();
     await expect(page.getByText("Admin", { exact: true })).toHaveCount(0);
-    await expect(page.getByRole("figure")).toHaveCount(10);
+    await expect(page.getByRole("link", { name: "Send a shoutout" })).toBeVisible();
 
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/signin/);

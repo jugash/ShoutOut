@@ -45,3 +45,23 @@ describe("upsertUserFromOidc (postgres)", () => {
     await expect(upsertUserFromOidc(db, { sub: "kc-2" })).rejects.toThrow(/missing sub or email/);
   });
 });
+
+describe("upsertUserFromOidc relinking (postgres)", () => {
+  const db = useTestDb();
+
+  it("relinks an existing user by email when their Keycloak id changes", async () => {
+    const original = await upsertUserFromOidc(db, {
+      sub: "old-id",
+      email: "erin@example.com",
+      name: "Erin",
+    });
+    const relinked = await upsertUserFromOidc(db, {
+      sub: "new-id",
+      email: "ERIN@example.com",
+      name: "Erin E",
+    });
+    expect(relinked.id).toBe(original.id);
+    expect(relinked.keycloakId).toBe("new-id");
+    expect(await db.user.count()).toBe(1);
+  });
+});
