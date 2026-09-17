@@ -132,6 +132,27 @@ app:
   ingress: { className: nginx, host: shoutout.example.com, tls: [...] }
 ```
 
+## Container image
+
+CI publishes a multi-arch (amd64 + arm64) image to
+`ghcr.io/opentooling/shoutout` for every commit on `main` that passes tests,
+Helm lint, `npm audit` and the Trivy scan. Tags: `sha-<short commit>`,
+`sha-<full commit>`, `main` and `latest`.
+
+Publishing to the `opentooling` org needs credentials that can write there:
+either host the repository in that org, or add a `GHCR_TOKEN` repository
+secret (a classic PAT with `write:packages` from an org member) and a
+`GHCR_USERNAME` variable. Without them CI still builds and scans, and skips
+publishing with a notice.
+
+To run the published image in the local k3d cluster instead of building:
+
+```bash
+GHCR_TAG=main deploy/local/deploy.sh      # or latest, sha-<commit>
+```
+
+The package must be public (or the cluster given a pull secret).
+
 ## License
 
 MIT

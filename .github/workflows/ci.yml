@@ -8,6 +8,9 @@ on:
     # Re-scan weekly so newly published vulnerabilities are caught without code changes.
     - cron: "0 6 * * 1"
 
+env:
+  IMAGE_NAME: ghcr.io/opentooling/shoutout
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -58,20 +61,43 @@ jobs:
         run: npm audit --audit-level=high
 
   image:
-    name: Build and scan container image
-    runs-on: ubuntu-latest
+    name: Build and scan container image (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            # Native Arm runner: no slow QEMU emulation. Matches Apple Silicon k3d clusters.
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # Publish only from main (pull requests and the weekly re-scan just build and scan),
+      # and only with credentials that can write to the opentooling org.
+      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && (secrets.GHCR_TOKEN != '' || github.repository_owner == 'opentooling') }}
+    outputs:
+      publish: ${{ env.PUBLISH }}
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
+      - name: Image labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
       - name: Build image
         uses: docker/build-push-action@v7
         with:
           context: .
-          push: false
+          platforms: linux/${{ matrix.arch }}
           load: true
           tags: shoutout:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=image-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=image-${{ matrix.arch }}
       - name: Trivy vulnerability scan (fails on fixable high/critical)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -80,3 +106,83 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           trivyignores: .trivyignore
+      - name: Explain skipped publish
+        if: env.PUBLISH != 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: echo "::notice::Image not published to $IMAGE_NAME. Add a GHCR_TOKEN secret (and GHCR_USERNAME variable) or move the repo to the opentooling org."
+      - name: Log in to GitHub Container Registry
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          # GITHUB_TOKEN can only publish under this repo's owner. To publish to the
+          # opentooling org from elsewhere, set the GHCR_USERNAME variable and a
+          # GHCR_TOKEN secret (classic PAT with write:packages, opentooling member).
+          username: ${{ vars.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Push the scanned image by digest
+        if: env.PUBLISH == 'true'
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=image-${{ matrix.arch }}
+      - name: Record digest
+        if: env.PUBLISH == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+      - uses: actions/upload-artifact@v7
+        if: env.PUBLISH == 'true'
+        with:
+          name: digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish multi-arch image to GHCR
+    if: needs.image.outputs.publish == 'true'
+    # Only publish a commit that passed every check.
+    needs: [test, helm, dependency-audit, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: digest-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/digests
+      - uses: docker/setup-buildx-action@v4
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=sha,format=long,prefix=sha-
+            type=raw,value=main
+            type=raw,value=latest
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          # GITHUB_TOKEN can only publish under this repo's owner. To publish to the
+          # opentooling org from elsewhere, set the GHCR_USERNAME variable and a
+          # GHCR_TOKEN secret (classic PAT with write:packages, opentooling member).
+          username: ${{ vars.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Create manifest list (amd64 + arm64)
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE_NAME }}@sha256:%s ' *)
+      - name: Show published image
+        run: docker buildx imagetools inspect "${{ env.IMAGE_NAME }}:sha-${{ github.sha }}"

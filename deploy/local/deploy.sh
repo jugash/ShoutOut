@@ -4,6 +4,8 @@
 #   SKIP_BUILD=1 deploy/local/deploy.sh   redeploy the last built tag
 #   RESET_KEYCLOAK_REALM=1 deploy/local/deploy.sh   re-import the realm (picks up realm changes)
 #   SKIP_SECURITY_SCAN=1 deploy/local/deploy.sh     skip the npm audit + Trivy image scan
+#   GHCR_TAG=main deploy/local/deploy.sh    deploy the image CI published to GHCR instead of building
+#                                           (any published tag: main, latest, sha-<commit>)
 set -euo pipefail
 
 CLUSTER="${CLUSTER:-shoutout}"
@@ -43,7 +45,24 @@ YAML
 kubectl -n kube-system rollout restart deployment coredns >/dev/null
 kubectl -n kube-system rollout status deployment coredns --timeout=120s >/dev/null
 
-if [[ -z "${SKIP_BUILD:-}" ]]; then
+IMAGE_ARGS=()
+if [[ -n "${GHCR_TAG:-}" ]]; then
+  TAG="$GHCR_TAG"
+  IMAGE="ghcr.io/opentooling/shoutout:$TAG"
+  log "Using published image $IMAGE (no local build)"
+  # Fail early with a clear message rather than a pod stuck in ImagePullBackOff.
+  first_node="$(k3d node list --no-headers | awk -v c="$CLUSTER" '$3==c && $2=="server" {print $1; exit}')"
+  if ! docker exec "$first_node" crictl pull "$IMAGE" >/dev/null; then
+    echo "Could not pull $IMAGE from the cluster. Has CI published it, and is the package public?" >&2
+    exit 1
+  fi
+  IMAGE_ARGS=(
+    --set app.image.repository=ghcr.io/opentooling/shoutout
+    --set app.image.pullPolicy=Always
+    # Moving tags like "main" keep the same name; force new pods so they pull again.
+    --set-string app.podAnnotations.shoutout/deployed-at="$(date +%s)"
+  )
+elif [[ -z "${SKIP_BUILD:-}" ]]; then
   TAG="$(git -C "$ROOT" rev-parse --short HEAD)-$(date +%s)"
   log "Building images (tag $TAG)"
   BUILD_LOG="$(mktemp)"
@@ -93,6 +112,7 @@ helm upgrade --install "$RELEASE" "$ROOT/deploy/helm/shoutout" \
   --namespace "$NAMESPACE" --create-namespace \
   -f "$ROOT/deploy/local/values-local.yaml" \
   --set app.image.tag="$TAG" \
+  ${IMAGE_ARGS[@]+"${IMAGE_ARGS[@]}"} \
   --wait --timeout 10m
 
 if [[ -n "${RESET_KEYCLOAK_REALM:-}" ]]; then
