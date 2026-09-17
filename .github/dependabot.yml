@@ -1,17 +1,46 @@
+# Dependency updates, grouped so each ecosystem opens at most a couple of PRs a week.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
     groups:
-      minor-and-patch:
+      npm-minor-and-patch:
         update-types: [minor, patch]
+      npm-major:
+        update-types: [major]
+    ignore:
+      # The runtime is Node 22 (Dockerfile, engines); keep the types on the same major.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # typescript-eslint (used by eslint-config-next) supports TypeScript < 6.1 only.
+      - dependency-name: typescript
+        versions: [">=6.1"]
+      # eslint-plugin-react bundled in eslint-config-next crashes on ESLint 10.
+      - dependency-name: eslint
+        versions: [">=10"]
+
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+      day: monday
+    groups:
+      docker-images:
+        patterns: ["*"]
+    ignore:
+      # Stay on the Node 22 LTS line until the app is tested on a newer major.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+    groups:
+      github-actions:
+        patterns: ["*"]
